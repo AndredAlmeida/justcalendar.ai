@@ -46,15 +46,7 @@ export function setupThemeToggle(button) {
   if (savedTheme === "dark" || savedTheme === "light") {
     applyTheme({ theme: savedTheme, root, button, themeColorMeta });
   } else {
-    const prefersDark =
-      window.matchMedia &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches;
-    applyTheme({
-      theme: prefersDark ? "dark" : "light",
-      root,
-      button,
-      themeColorMeta,
-    });
+    applyTheme({ theme: "dark", root, button, themeColorMeta });
   }
 
   button.addEventListener("click", () => {
