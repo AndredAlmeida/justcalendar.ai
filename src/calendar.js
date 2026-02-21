@@ -383,11 +383,6 @@ export function initInfiniteCalendar(container) {
     }
   }
 
-  function parsePx(value, fallback) {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-
   function getCellTargetCenterWithinCanvas(cell) {
     const table = cell.closest("table");
     if (!table) return null;
@@ -409,28 +404,52 @@ export function initInfiniteCalendar(container) {
       return null;
     }
 
-    const headHeight = table.tHead?.offsetHeight ?? 0;
-    const defaultColWidth = table.clientWidth / colEls.length;
-    const defaultRowHeight = bodyRows.length
-      ? Math.max(table.offsetHeight - headHeight, 0) / bodyRows.length
-      : 0;
+    // Measure exact final row/column geometry using a hidden clone with target styles.
+    const probeHost = document.createElement("div");
+    probeHost.style.position = "absolute";
+    probeHost.style.left = "-100000px";
+    probeHost.style.top = "0";
+    probeHost.style.width = `${table.clientWidth}px`;
+    probeHost.style.visibility = "hidden";
+    probeHost.style.pointerEvents = "none";
 
-    const colWidths = colEls.map((col) => parsePx(col.style.width, defaultColWidth));
-    const rowHeights = bodyRows.map((row) => parsePx(row.style.height, defaultRowHeight));
-
-    let x = tableRect.left;
-    for (let idx = 0; idx < colIndex; idx += 1) {
-      x += colWidths[idx];
+    const probeTable = table.cloneNode(true);
+    if (!(probeTable instanceof HTMLTableElement)) {
+      return null;
     }
-    x += colWidths[colIndex] / 2;
+    probeTable.style.width = `${table.clientWidth}px`;
+    probeTable.style.height = `${table.offsetHeight}px`;
+    probeTable.style.transition = "none";
+    probeTable.querySelectorAll("col").forEach((col) => {
+      col.style.transition = "none";
+    });
+    probeTable.querySelectorAll("tbody tr").forEach((row) => {
+      row.style.transition = "none";
+    });
 
-    let y = tableRect.top + headHeight;
-    for (let idx = 0; idx < rowIndex; idx += 1) {
-      y += rowHeights[idx];
+    probeHost.appendChild(probeTable);
+    calendarCanvas.appendChild(probeHost);
+
+    try {
+      const probeRow = probeTable.tBodies[0]?.rows?.[rowIndex] ?? null;
+      const probeCell = probeRow?.cells?.[colIndex] ?? null;
+      if (!probeCell) return null;
+
+      const probeTableRect = probeTable.getBoundingClientRect();
+      const probeCellRect = probeCell.getBoundingClientRect();
+      const centerX =
+        tableRect.left +
+        (probeCellRect.left - probeTableRect.left) +
+        probeCellRect.width / 2;
+      const centerY =
+        tableRect.top +
+        (probeCellRect.top - probeTableRect.top) +
+        probeCellRect.height / 2;
+
+      return { x: centerX, y: centerY };
+    } finally {
+      probeHost.remove();
     }
-    y += rowHeights[rowIndex] / 2;
-
-    return { x, y };
   }
 
   function clearCanvasZoom({ immediate = false } = {}) {
