@@ -850,6 +850,8 @@ export function initInfiniteCalendar(container) {
   document.addEventListener("click", (event) => {
     const clickedElement = event.target instanceof Element ? event.target : null;
     if (clickedElement?.closest("td.day-cell")) return;
+    if (clickedElement?.closest("#tweak-controls")) return;
+    if (clickedElement?.closest("#mobile-debug-toggle")) return;
     clearSelectedDayCell();
   });
 

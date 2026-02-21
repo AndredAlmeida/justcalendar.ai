@@ -202,6 +202,33 @@
         color: var(--ink);
       }
 
+      .tweak-controls-close {
+        display: none;
+        position: absolute;
+        top: 0.46rem;
+        right: 0.48rem;
+        width: 1.8rem;
+        height: 1.8rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--panel);
+        color: var(--ink);
+        font-size: 1rem;
+        font-weight: 700;
+        line-height: 1;
+        padding: 0;
+        cursor: pointer;
+      }
+
+      .tweak-controls-close:active {
+        transform: scale(0.97);
+      }
+
+      .tweak-controls-close:focus-visible {
+        outline: 2px solid #3b82f6;
+        outline-offset: 2px;
+      }
+
       .tweak-control {
         display: grid;
         grid-template-columns: 4.9rem 1fr 2.8rem;
@@ -1146,8 +1173,13 @@
 
         #tweak-controls {
           width: calc(100% - 1.3rem);
-          padding: 0.55rem 0.6rem;
+          padding: 0.55rem 2.65rem 0.55rem 0.6rem;
           bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+        }
+
+        .tweak-controls-close {
+          display: inline-grid;
+          place-items: center;
         }
 
         .tweak-control {
@@ -1364,6 +1396,14 @@
       </header>
       <section id="tweak-controls" aria-label="Day selection controls" hidden>
         <h2 class="tweak-controls-title">Debug Parameters</h2>
+        <button
+          id="tweak-controls-close"
+          class="tweak-controls-close"
+          type="button"
+          aria-label="Close debug parameters"
+        >
+          ×
+        </button>
         <label class="tweak-control" for="selection-camera-zoom">
           <span>Cell Zoom</span>
           <input

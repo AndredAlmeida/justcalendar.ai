@@ -87,6 +87,7 @@ export function setupTweakControls({
   onSelectionExpansionChange,
 } = {}) {
   const controlsPanel = document.getElementById("tweak-controls");
+  const controlsCloseButton = document.getElementById("tweak-controls-close");
   const cameraZoomInput = document.getElementById("selection-camera-zoom");
   const cameraZoomOutput = document.getElementById("selection-camera-zoom-value");
   const expansionXInput = document.getElementById("selection-expand-x");
@@ -95,6 +96,10 @@ export function setupTweakControls({
   const expansionYOutput = document.getElementById("selection-expand-y-value");
 
   setPanelExpandedState(panelToggleButton, controlsPanel, false);
+  const closeControlsPanel = () => {
+    if (!controlsPanel) return;
+    setPanelExpandedState(panelToggleButton, controlsPanel, false);
+  };
   const toggleControlsPanel = () => {
     if (!controlsPanel) return;
     setPanelExpandedState(
@@ -106,6 +111,9 @@ export function setupTweakControls({
 
   if (panelToggleButton && controlsPanel) {
     panelToggleButton.addEventListener("click", toggleControlsPanel);
+  }
+  if (controlsCloseButton && controlsPanel) {
+    controlsCloseButton.addEventListener("click", closeControlsPanel);
   }
 
   if (controlsPanel) {
