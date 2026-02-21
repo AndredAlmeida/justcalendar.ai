@@ -9,6 +9,8 @@ const LOAD_BATCH = 4;
 const TOP_THRESHOLD = 450;
 const BOTTOM_THRESHOLD = 650;
 const FAST_SCROLL_DURATION_MS = 380;
+const SELECTED_ROW_HEIGHT_MULTIPLIER = 1.5;
+const MIN_OTHER_ROW_HEIGHT_RATIO = 0.06;
 
 export const MIN_SELECTION_EXPANSION = 1;
 export const MAX_SELECTION_EXPANSION = 3;
@@ -130,8 +132,9 @@ function buildMonthCard(monthStart, getDayStateByKey, todayDayKey) {
   table.appendChild(thead);
 
   const tbody = document.createElement("tbody");
+  const weekCount = Math.ceil((firstWeekday + totalDays) / 7);
   let dayNumber = 1;
-  for (let row = 0; row < 6; row += 1) {
+  for (let row = 0; row < weekCount; row += 1) {
     const tr = document.createElement("tr");
     tr.dataset.rowIndex = String(row);
     for (let col = 0; col < 7; col += 1) {
@@ -297,7 +300,11 @@ export function initInfiniteCalendar(container) {
     const colCount = colEls.length;
     table.style.height = `${totalHeight}px`;
 
-    const expandedRowHeight = bodyHeight * (selectionExpansion / rowCount);
+    const requestedExpandedRowHeight =
+      bodyHeight * ((selectionExpansion * SELECTED_ROW_HEIGHT_MULTIPLIER) / rowCount);
+    const minOtherRowHeight = bodyHeight * MIN_OTHER_ROW_HEIGHT_RATIO;
+    const maxExpandedRowHeight = bodyHeight - minOtherRowHeight * (rowCount - 1);
+    const expandedRowHeight = clamp(requestedExpandedRowHeight, 0, maxExpandedRowHeight);
     const otherRowHeight = (bodyHeight - expandedRowHeight) / (rowCount - 1);
 
     bodyRows.forEach((row, idx) => {

@@ -7,7 +7,9 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <meta name="theme-color" content="#020617" />
-    <title>Infinite Calendar</title>
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <title>Just Calendar</title>
     <style>
       :root {
         --panel: #ffffff;
@@ -95,6 +97,14 @@
         display: none;
       }
 
+      .tweak-controls-title {
+        margin: 0;
+        font-size: 0.76rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink);
+      }
+
       .tweak-control {
         display: grid;
         grid-template-columns: 4.9rem 1fr 2.8rem;
@@ -168,7 +178,7 @@
       td {
         border-right: 1px solid var(--line);
         border-bottom: 1px solid var(--line);
-        height: 2.6rem;
+        height: calc(2.6rem * 1.4);
       }
 
       th:last-child,
@@ -564,7 +574,7 @@
 
         th,
         td {
-          height: 2.2rem;
+          height: calc(2.2rem * 1.4);
           font-size: 0.82rem;
         }
 
@@ -616,7 +626,7 @@
   <body>
     <div id="app">
       <header>
-        <h1>Infinite Scrolling Calendar</h1>
+        <h1>Just Calendar</h1>
         <button
           id="today-toggle"
           type="button"
@@ -640,6 +650,7 @@
         </button>
       </header>
       <section id="tweak-controls" aria-label="Day selection controls" hidden>
+        <h2 class="tweak-controls-title">Debug Parameters</h2>
         <label class="tweak-control" for="selection-expand">
           <span>Expand</span>
           <input
