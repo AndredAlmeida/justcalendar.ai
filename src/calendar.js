@@ -369,13 +369,39 @@ export function initInfiniteCalendar(container) {
       };
     }
 
+    const getCurrentCanvasScale = () => {
+      const transformValue = calendarCanvas.style.transform;
+      if (!transformValue || transformValue === "none") return 1;
+
+      const matrixMatch = transformValue.match(/^matrix\((.+)\)$/);
+      if (matrixMatch) {
+        const values = matrixMatch[1].split(",").map((entry) => Number(entry.trim()));
+        if (values.length >= 2 && Number.isFinite(values[0]) && Number.isFinite(values[1])) {
+          const scale = Math.hypot(values[0], values[1]);
+          return scale > 0 ? scale : 1;
+        }
+      }
+
+      const matrix3dMatch = transformValue.match(/^matrix3d\((.+)\)$/);
+      if (matrix3dMatch) {
+        const values = matrix3dMatch[1].split(",").map((entry) => Number(entry.trim()));
+        if (values.length >= 2 && Number.isFinite(values[0]) && Number.isFinite(values[1])) {
+          const scale = Math.hypot(values[0], values[1]);
+          return scale > 0 ? scale : 1;
+        }
+      }
+
+      return 1;
+    };
+
     const elementRect = element.getBoundingClientRect();
     const canvasRect = calendarCanvas.getBoundingClientRect();
+    const scale = getCurrentCanvasScale();
     return {
-      left: elementRect.left - canvasRect.left,
-      top: elementRect.top - canvasRect.top,
-      width: elementRect.width,
-      height: elementRect.height,
+      left: (elementRect.left - canvasRect.left) / scale,
+      top: (elementRect.top - canvasRect.top) / scale,
+      width: elementRect.width / scale,
+      height: elementRect.height / scale,
     };
   }
 
@@ -413,7 +439,7 @@ export function initInfiniteCalendar(container) {
 
     // Measure exact final row/column geometry using a hidden clone with target styles.
     const probeHost = document.createElement("div");
-    probeHost.style.position = "absolute";
+    probeHost.style.position = "fixed";
     probeHost.style.left = "-100000px";
     probeHost.style.top = "0";
     probeHost.style.width = `${table.clientWidth}px`;
@@ -435,7 +461,7 @@ export function initInfiniteCalendar(container) {
     });
 
     probeHost.appendChild(probeTable);
-    calendarCanvas.appendChild(probeHost);
+    document.body.appendChild(probeHost);
 
     try {
       const probeRow = probeTable.tBodies[0]?.rows?.[rowIndex] ?? null;
@@ -486,30 +512,43 @@ export function initInfiniteCalendar(container) {
       finishReset();
     };
     calendarCanvas.addEventListener("transitionend", zoomResetHandler);
-    calendarCanvas.style.transform = "translate(0px, 0px) scale(1)";
+    calendarCanvas.style.transformOrigin = "0 0";
+    calendarCanvas.style.transform = "matrix(1, 0, 0, 1, 0, 0)";
     zoomResetTimer = window.setTimeout(finishReset, 300);
   }
 
   function applyCanvasZoomForCell(cell) {
     if (!cell || !cell.isConnected) return;
 
-    clearCanvasZoom({ immediate: true });
+    cleanupZoomResetListeners();
     const scale = clamp(cameraZoom, MIN_CAMERA_ZOOM, MAX_CAMERA_ZOOM);
+    const shouldResetFirst =
+      !container.classList.contains("is-zoomed") || !calendarCanvas.style.transform;
+
+    if (shouldResetFirst) {
+      clearCanvasZoom({ immediate: true });
+    }
 
     requestAnimationFrame(() => {
       if (!cell.isConnected || selectedCell !== cell) return;
       const center = getCellTargetCenterWithinCanvas(cell);
-      const originX = center?.x;
-      const originY = center?.y;
-      if (!Number.isFinite(originX) || !Number.isFinite(originY)) return;
-      const viewX = originX - container.scrollLeft;
-      const viewY = originY - container.scrollTop;
-      const targetX = container.clientWidth / 2 - viewX;
-      const targetY = container.clientHeight / 2 - viewY;
+      const targetCenterX = center?.x;
+      const targetCenterY = center?.y;
+      if (!Number.isFinite(targetCenterX) || !Number.isFinite(targetCenterY)) return;
+
+      // Fixed-origin matrix transform keeps retarget panning stable at zoom > 1.
+      const targetX =
+        container.clientWidth / 2 +
+        container.scrollLeft -
+        scale * targetCenterX;
+      const targetY =
+        container.clientHeight / 2 +
+        container.scrollTop -
+        scale * targetCenterY;
 
       container.classList.add("is-zoomed");
-      calendarCanvas.style.transformOrigin = `${originX}px ${originY}px`;
-      calendarCanvas.style.transform = `translate(${targetX}px, ${targetY}px) scale(${scale})`;
+      calendarCanvas.style.transformOrigin = "0 0";
+      calendarCanvas.style.transform = `matrix(${scale}, 0, 0, ${scale}, ${targetX}, ${targetY})`;
     });
   }
 
