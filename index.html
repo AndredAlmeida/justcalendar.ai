@@ -306,8 +306,16 @@
         transition: height 0.14s cubic-bezier(0.22, 0.61, 0.36, 1);
       }
 
+      table.is-unexpanding {
+        transition-duration: 0.42s;
+      }
+
       col {
         transition: width 0.14s cubic-bezier(0.22, 0.61, 0.36, 1);
+      }
+
+      table.is-unexpanding col {
+        transition-duration: 0.42s;
       }
 
       th,
@@ -328,6 +336,10 @@
 
       tbody tr {
         transition: height 0.14s cubic-bezier(0.22, 0.61, 0.36, 1);
+      }
+
+      table.is-unexpanding tbody tr {
+        transition-duration: 0.42s;
       }
 
       th {
@@ -365,7 +377,7 @@
       }
 
       td.day-cell.is-deselecting {
-        transition-duration: 0.72s, 0.72s, 0.72s;
+        transition-duration: 1.08s, 1.08s, 1.08s;
       }
 
       .day-cell-content {

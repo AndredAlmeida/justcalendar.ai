@@ -11,7 +11,11 @@ const BOTTOM_THRESHOLD = 650;
 const FAST_SCROLL_DURATION_MS = 380;
 const SELECTED_ROW_HEIGHT_MULTIPLIER = 1.5;
 const MIN_OTHER_ROW_HEIGHT_RATIO = 0.06;
-const DAY_DESELECT_FADE_MS = 720;
+const DAY_DESELECT_FADE_MS = 1080;
+const ZOOM_OUT_DURATION_MS = 480;
+const ZOOM_OUT_RESET_FALLBACK_MS = ZOOM_OUT_DURATION_MS + 120;
+const TABLE_UNEXPAND_DURATION_MS = 420;
+const TABLE_UNEXPAND_RESET_FALLBACK_MS = TABLE_UNEXPAND_DURATION_MS + 80;
 
 export const MIN_SELECTION_EXPANSION = 1;
 export const MAX_SELECTION_EXPANSION = 3;
@@ -217,6 +221,7 @@ export function initInfiniteCalendar(container) {
   const dayStatesByKey = loadDayStates();
   const tableBaseLayoutMap = new WeakMap();
   const cellDeselectFadeTimers = new WeakMap();
+  const tableUnexpandTimers = new WeakMap();
   const calendarCanvas = document.createElement("div");
   calendarCanvas.id = "calendar-canvas";
   container.appendChild(calendarCanvas);
@@ -495,6 +500,7 @@ export function initInfiniteCalendar(container) {
       cleanupZoomResetListeners();
       calendarCanvas.style.transformOrigin = "";
       calendarCanvas.style.transform = "";
+      calendarCanvas.style.transitionDuration = "";
     };
 
     if (immediate) {
@@ -514,9 +520,10 @@ export function initInfiniteCalendar(container) {
       finishReset();
     };
     calendarCanvas.addEventListener("transitionend", zoomResetHandler);
+    calendarCanvas.style.transitionDuration = `${ZOOM_OUT_DURATION_MS}ms`;
     calendarCanvas.style.transformOrigin = "0 0";
     calendarCanvas.style.transform = "matrix(1, 0, 0, 1, 0, 0)";
-    zoomResetTimer = window.setTimeout(finishReset, 300);
+    zoomResetTimer = window.setTimeout(finishReset, ZOOM_OUT_RESET_FALLBACK_MS);
   }
 
   function clearCellDeselectFade(cell) {
@@ -538,6 +545,27 @@ export function initInfiniteCalendar(container) {
       cellDeselectFadeTimers.delete(cell);
     }, DAY_DESELECT_FADE_MS);
     cellDeselectFadeTimers.set(cell, fadeTimer);
+  }
+
+  function clearTableUnexpandTransition(table) {
+    if (!table) return;
+    const existingTimer = tableUnexpandTimers.get(table);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      tableUnexpandTimers.delete(table);
+    }
+    table.classList.remove("is-unexpanding");
+  }
+
+  function startTableUnexpandTransition(table) {
+    if (!table) return;
+    clearTableUnexpandTransition(table);
+    table.classList.add("is-unexpanding");
+    const unexpandTimer = window.setTimeout(() => {
+      table.classList.remove("is-unexpanding");
+      tableUnexpandTimers.delete(table);
+    }, TABLE_UNEXPAND_RESET_FALLBACK_MS);
+    tableUnexpandTimers.set(table, unexpandTimer);
   }
 
   function applyCanvasZoomForCell(cell) {
@@ -656,6 +684,7 @@ export function initInfiniteCalendar(container) {
     startCellDeselectFade(previousCell);
     const previousTable = previousCell.closest("table");
     if (previousTable) {
+      startTableUnexpandTransition(previousTable);
       clearTableSelectionLayout(previousTable);
     }
     clearCanvasZoom();
