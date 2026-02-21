@@ -11,6 +11,7 @@ const BOTTOM_THRESHOLD = 650;
 const FAST_SCROLL_DURATION_MS = 380;
 const SELECTED_ROW_HEIGHT_MULTIPLIER = 1.5;
 const MIN_OTHER_ROW_HEIGHT_RATIO = 0.06;
+const DAY_DESELECT_FADE_MS = 720;
 
 export const MIN_SELECTION_EXPANSION = 1;
 export const MAX_SELECTION_EXPANSION = 3;
@@ -215,6 +216,7 @@ export function initInfiniteCalendar(container) {
   const todayDayKey = formatDayKey(now.getFullYear(), now.getMonth(), now.getDate());
   const dayStatesByKey = loadDayStates();
   const tableBaseLayoutMap = new WeakMap();
+  const cellDeselectFadeTimers = new WeakMap();
   const calendarCanvas = document.createElement("div");
   calendarCanvas.id = "calendar-canvas";
   container.appendChild(calendarCanvas);
@@ -517,6 +519,27 @@ export function initInfiniteCalendar(container) {
     zoomResetTimer = window.setTimeout(finishReset, 300);
   }
 
+  function clearCellDeselectFade(cell) {
+    if (!cell) return;
+    const existingTimer = cellDeselectFadeTimers.get(cell);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      cellDeselectFadeTimers.delete(cell);
+    }
+    cell.classList.remove("is-deselecting");
+  }
+
+  function startCellDeselectFade(cell) {
+    if (!cell) return;
+    clearCellDeselectFade(cell);
+    cell.classList.add("is-deselecting");
+    const fadeTimer = window.setTimeout(() => {
+      cell.classList.remove("is-deselecting");
+      cellDeselectFadeTimers.delete(cell);
+    }, DAY_DESELECT_FADE_MS);
+    cellDeselectFadeTimers.set(cell, fadeTimer);
+  }
+
   function applyCanvasZoomForCell(cell) {
     if (!cell || !cell.isConnected) return;
 
@@ -630,6 +653,7 @@ export function initInfiniteCalendar(container) {
     const previousCell = selectedCell;
     selectedCell = null;
     previousCell.classList.remove("selected-day");
+    startCellDeselectFade(previousCell);
     const previousTable = previousCell.closest("table");
     if (previousTable) {
       clearTableSelectionLayout(previousTable);
@@ -652,9 +676,12 @@ export function initInfiniteCalendar(container) {
     }
 
     if (selectedCell) {
+      clearCellDeselectFade(selectedCell);
       selectedCell.classList.remove("selected-day");
+      startCellDeselectFade(selectedCell);
     }
     selectedCell = cell;
+    clearCellDeselectFade(selectedCell);
     selectedCell.classList.add("selected-day");
 
     const table = selectedCell.closest("table");
