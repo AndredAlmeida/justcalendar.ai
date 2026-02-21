@@ -9,6 +9,7 @@ const LOAD_BATCH = 4;
 const TOP_THRESHOLD = 450;
 const BOTTOM_THRESHOLD = 650;
 const FAST_SCROLL_DURATION_MS = 380;
+const TABLE_LAYOUT_SETTLE_MS = 180;
 const SELECTED_ROW_HEIGHT_MULTIPLIER = 1.5;
 const MIN_OTHER_ROW_HEIGHT_RATIO = 0.06;
 
@@ -220,6 +221,7 @@ export function initInfiniteCalendar(container) {
   let cellExpansionY = DEFAULT_CELL_EXPANSION_Y;
   let cameraZoom = DEFAULT_CAMERA_ZOOM;
   let fastScrollFrame = 0;
+  let layoutSettleTimer = 0;
   let zoomResetTimer = 0;
   let zoomResetHandler = null;
 
@@ -383,6 +385,12 @@ export function initInfiniteCalendar(container) {
     }
   }
 
+  function clearLayoutSettleTimer() {
+    if (!layoutSettleTimer) return;
+    clearTimeout(layoutSettleTimer);
+    layoutSettleTimer = 0;
+  }
+
   function clearCanvasZoom({ immediate = false } = {}) {
     cleanupZoomResetListeners();
     container.classList.remove("is-zoomed");
@@ -414,17 +422,13 @@ export function initInfiniteCalendar(container) {
     zoomResetTimer = window.setTimeout(finishReset, 300);
   }
 
-  function applyCanvasZoomForCell(cell) {
+  function applyCanvasZoomForCell(cell, { preserveCurrentTransform = false } = {}) {
     if (!cell || !cell.isConnected) return;
 
-    clearCanvasZoom({ immediate: true });
+    if (!preserveCurrentTransform) {
+      clearCanvasZoom({ immediate: true });
+    }
     const scale = clamp(cameraZoom, MIN_CAMERA_ZOOM, MAX_CAMERA_ZOOM);
-    const containerRect = container.getBoundingClientRect();
-    const cellRect = cell.getBoundingClientRect();
-    const cellCenterX = cellRect.left - containerRect.left + cellRect.width / 2;
-    const cellCenterY = cellRect.top - containerRect.top + cellRect.height / 2;
-    const targetX = container.clientWidth / 2 - cellCenterX;
-    const targetY = container.clientHeight / 2 - cellCenterY;
 
     requestAnimationFrame(() => {
       if (!cell.isConnected || selectedCell !== cell) return;
@@ -433,11 +437,26 @@ export function initInfiniteCalendar(container) {
 
       const originX = rect.left + rect.width / 2;
       const originY = rect.top + rect.height / 2;
+      const viewX = originX - container.scrollLeft;
+      const viewY = originY - container.scrollTop;
+      const targetX = container.clientWidth / 2 - viewX;
+      const targetY = container.clientHeight / 2 - viewY;
 
       container.classList.add("is-zoomed");
       calendarCanvas.style.transformOrigin = `${originX}px ${originY}px`;
       calendarCanvas.style.transform = `translate(${targetX}px, ${targetY}px) scale(${scale})`;
     });
+  }
+
+  function scheduleSelectionZoomRecenter(cell) {
+    clearLayoutSettleTimer();
+    if (!cell || !cell.isConnected) return;
+
+    layoutSettleTimer = window.setTimeout(() => {
+      layoutSettleTimer = 0;
+      if (!selectedCell || selectedCell !== cell || !cell.isConnected) return;
+      applyCanvasZoomForCell(cell, { preserveCurrentTransform: true });
+    }, TABLE_LAYOUT_SETTLE_MS);
   }
 
   function reapplySelectionFocus() {
@@ -449,6 +468,7 @@ export function initInfiniteCalendar(container) {
       applyTableSelectionLayout(table, rowIndex, colIndex);
     }
     applyCanvasZoomForCell(selectedCell);
+    scheduleSelectionZoomRecenter(selectedCell);
   }
 
   function setCellExpansionX(nextValue) {
@@ -515,6 +535,7 @@ export function initInfiniteCalendar(container) {
   function clearSelectedDayCell() {
     if (!selectedCell) return false;
 
+    clearLayoutSettleTimer();
     const previousCell = selectedCell;
     selectedCell = null;
     previousCell.classList.remove("selected-day");
@@ -558,11 +579,13 @@ export function initInfiniteCalendar(container) {
         if (!selectedCell || selectedCell !== cell || !cell.isConnected) return;
         applyTableSelectionLayout(table, rowIndex, colIndex);
         applyCanvasZoomForCell(selectedCell);
+        scheduleSelectionZoomRecenter(selectedCell);
       });
       return;
     }
 
     applyCanvasZoomForCell(selectedCell);
+    scheduleSelectionZoomRecenter(selectedCell);
   }
 
   function appendFutureMonths(count) {
