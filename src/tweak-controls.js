@@ -13,8 +13,12 @@ import {
 const CELL_EXPANSION_X_STORAGE_KEY = "justcal-cell-expansion-x";
 const CELL_EXPANSION_Y_STORAGE_KEY = "justcal-cell-expansion-y";
 const CAMERA_ZOOM_STORAGE_KEY = "justcal-camera-zoom";
+const FADE_DELTA_STORAGE_KEY = "justcal-fade-delta";
 const LEGACY_CELL_EXPANSION_STORAGE_KEY = "justcal-cell-expansion";
 const LEGACY_SELECTION_EXPANSION_STORAGE_KEY = "justcal-selection-expansion";
+const MIN_FADE_DELTA = 0;
+const MAX_FADE_DELTA = 100;
+const DEFAULT_FADE_DELTA = 1;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -84,6 +88,7 @@ export function setupTweakControls({
   onCellExpansionYChange,
   onCellExpansionChange,
   onCameraZoomChange,
+  onFadeDeltaChange,
   onSelectionExpansionChange,
 } = {}) {
   const controlsPanel = document.getElementById("tweak-controls");
@@ -94,6 +99,8 @@ export function setupTweakControls({
   const expansionXOutput = document.getElementById("selection-expand-x-value");
   const expansionYInput = document.getElementById("selection-expand-y");
   const expansionYOutput = document.getElementById("selection-expand-y-value");
+  const fadeDeltaInput = document.getElementById("selection-fade-delta");
+  const fadeDeltaOutput = document.getElementById("selection-fade-delta-value");
 
   setPanelExpandedState(panelToggleButton, controlsPanel, false);
   const closeControlsPanel = () => {
@@ -140,6 +147,10 @@ export function setupTweakControls({
     expansionYInput.min = String(MIN_CELL_EXPANSION_Y);
     expansionYInput.max = String(MAX_CELL_EXPANSION_Y);
   }
+  if (fadeDeltaInput) {
+    fadeDeltaInput.min = String(MIN_FADE_DELTA);
+    fadeDeltaInput.max = String(MAX_FADE_DELTA);
+  }
 
   const storedCameraZoom = getStoredNumericValue(CAMERA_ZOOM_STORAGE_KEY);
   const legacyCellExpansion = getStoredNumericValue(
@@ -167,6 +178,12 @@ export function setupTweakControls({
     storedCellExpansionY ?? legacyExpansionValue ?? DEFAULT_CELL_EXPANSION_Y,
     MIN_CELL_EXPANSION_Y,
     MAX_CELL_EXPANSION_Y,
+  );
+  const storedFadeDelta = getStoredNumericValue(FADE_DELTA_STORAGE_KEY);
+  const initialFadeDelta = clamp(
+    storedFadeDelta ?? DEFAULT_FADE_DELTA,
+    MIN_FADE_DELTA,
+    MAX_FADE_DELTA,
   );
 
   const hasAxisExpansionHandlers =
@@ -229,6 +246,21 @@ export function setupTweakControls({
     saveNumericValue(CELL_EXPANSION_Y_STORAGE_KEY, clampedValue);
   }
 
+  function applyFadeDelta(nextValue) {
+    if (!fadeDeltaInput) return;
+    const clampedValue = clamp(
+      Number(nextValue),
+      MIN_FADE_DELTA,
+      MAX_FADE_DELTA,
+    );
+    fadeDeltaInput.value = String(clampedValue);
+    if (fadeDeltaOutput) {
+      fadeDeltaOutput.textContent = `${clampedValue.toFixed(2)}x`;
+    }
+    onFadeDeltaChange?.(clampedValue);
+    saveNumericValue(FADE_DELTA_STORAGE_KEY, clampedValue);
+  }
+
   if (cameraZoomInput) {
     applyCameraZoom(initialCameraZoom);
     cameraZoomInput.addEventListener("input", () => {
@@ -247,6 +279,13 @@ export function setupTweakControls({
     applyCellExpansionY(initialCellExpansionY);
     expansionYInput.addEventListener("input", () => {
       applyCellExpansionY(expansionYInput.value);
+    });
+  }
+
+  if (fadeDeltaInput) {
+    applyFadeDelta(initialFadeDelta);
+    fadeDeltaInput.addEventListener("input", () => {
+      applyFadeDelta(fadeDeltaInput.value);
     });
   }
 }
