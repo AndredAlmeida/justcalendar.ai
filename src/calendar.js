@@ -197,9 +197,32 @@ function createDayStateButton(state, isActive) {
 function formatScoreLabel(scoreValue) {
   const normalizedScore = normalizeScoreValue(scoreValue);
   if (normalizedScore === SCORE_UNASSIGNED) {
-    return "Unassigned";
+    return "-1 (Unassigned)";
   }
   return String(normalizedScore);
+}
+
+function getScoreProgressPercent(scoreValue) {
+  const normalizedScore = normalizeScoreValue(scoreValue);
+  const progressRatio = (normalizedScore - SCORE_MIN) / (SCORE_MAX - SCORE_MIN);
+  const progressPercent = clamp(progressRatio * 100, 0, 100);
+  return `${progressPercent}%`;
+}
+
+function syncDayScoreControls(cell, scoreValue) {
+  const normalizedScore = normalizeScoreValue(scoreValue);
+
+  const scoreSlider = cell.querySelector(".day-score-slider");
+  if (scoreSlider instanceof HTMLInputElement) {
+    scoreSlider.value = String(normalizedScore);
+    scoreSlider.style.setProperty("--score-progress", getScoreProgressPercent(normalizedScore));
+    scoreSlider.setAttribute("aria-valuetext", formatScoreLabel(normalizedScore));
+  }
+
+  const scoreValueLabel = cell.querySelector(".day-score-value");
+  if (scoreValueLabel) {
+    scoreValueLabel.textContent = formatScoreLabel(normalizedScore);
+  }
 }
 
 function applyDayStateToCell(cell, dayState) {
@@ -213,15 +236,7 @@ function applyDayStateToCell(cell, dayState) {
     button.classList.toggle("is-active", isActive);
     button.setAttribute("aria-pressed", String(isActive));
   });
-
-  const scoreSlider = cell.querySelector(".day-score-slider");
-  if (scoreSlider instanceof HTMLInputElement) {
-    scoreSlider.value = String(SCORE_UNASSIGNED);
-  }
-  const scoreValueLabel = cell.querySelector(".day-score-value");
-  if (scoreValueLabel) {
-    scoreValueLabel.textContent = formatScoreLabel(SCORE_UNASSIGNED);
-  }
+  syncDayScoreControls(cell, SCORE_UNASSIGNED);
 }
 
 function applyDayScoreToCell(cell, dayScore) {
@@ -232,15 +247,7 @@ function applyDayScoreToCell(cell, dayScore) {
   } else {
     cell.dataset.dayScore = String(normalizedScore);
   }
-
-  const scoreSlider = cell.querySelector(".day-score-slider");
-  if (scoreSlider instanceof HTMLInputElement) {
-    scoreSlider.value = String(normalizedScore);
-  }
-  const scoreValueLabel = cell.querySelector(".day-score-value");
-  if (scoreValueLabel) {
-    scoreValueLabel.textContent = formatScoreLabel(normalizedScore);
-  }
+  syncDayScoreControls(cell, normalizedScore);
 }
 
 function applyDayValueToCell(cell, dayValue, calendarType) {
@@ -403,6 +410,8 @@ export function initInfiniteCalendar(container) {
   let zoomResetHandler = null;
   let activeCalendarId = DEFAULT_CALENDAR_ID;
   let activeCalendarType = DEFAULT_CALENDAR_TYPE;
+  let shouldPanZoomOnDaySelect = true;
+  let shouldExpandOnDaySelect = true;
 
   function ensureActiveCalendarDayStates() {
     if (!dayStatesByCalendarId[activeCalendarId]) {
@@ -783,6 +792,11 @@ export function initInfiniteCalendar(container) {
   function applyCanvasZoomForCell(cell) {
     if (!cell || !cell.isConnected) return;
 
+    if (!shouldPanZoomOnDaySelect) {
+      clearCanvasZoom();
+      return;
+    }
+
     cleanupZoomResetListeners();
     const scale = clamp(cameraZoom, MIN_CAMERA_ZOOM, MAX_CAMERA_ZOOM);
     const shouldResetFirst =
@@ -821,7 +835,12 @@ export function initInfiniteCalendar(container) {
     const rowIndex = Number(selectedCell.parentElement?.dataset.rowIndex ?? -1);
     const colIndex = Number(selectedCell.dataset.colIndex ?? -1);
     if (table && rowIndex >= 0 && colIndex >= 0) {
-      applyTableSelectionLayout(table, rowIndex, colIndex);
+      if (shouldExpandOnDaySelect) {
+        applyTableSelectionLayout(table, rowIndex, colIndex);
+      } else {
+        clearTableUnexpandTransition(table);
+        clearTableSelectionLayout(table);
+      }
     }
     applyCanvasZoomForCell(selectedCell);
   }
@@ -887,6 +906,32 @@ export function initInfiniteCalendar(container) {
     return setCellExpansion(nextValue);
   }
 
+  function setPanZoomOnDaySelect(nextValue) {
+    const nextEnabled = nextValue !== false;
+    const didChange = nextEnabled !== shouldPanZoomOnDaySelect;
+    shouldPanZoomOnDaySelect = nextEnabled;
+
+    if (didChange && !nextEnabled) {
+      clearCanvasZoom();
+    } else if (didChange && nextEnabled) {
+      reapplySelectionFocus();
+    }
+
+    return shouldPanZoomOnDaySelect;
+  }
+
+  function setExpandOnDaySelect(nextValue) {
+    const nextEnabled = nextValue !== false;
+    const didChange = nextEnabled !== shouldExpandOnDaySelect;
+    shouldExpandOnDaySelect = nextEnabled;
+
+    if (didChange) {
+      reapplySelectionFocus();
+    }
+
+    return shouldExpandOnDaySelect;
+  }
+
   function setActiveCalendar(nextCalendar) {
     const normalizedCalendarIdRaw =
       typeof nextCalendar === "string"
@@ -928,7 +973,11 @@ export function initInfiniteCalendar(container) {
     startCellDeselectFade(previousCell);
     const previousTable = previousCell.closest("table");
     if (previousTable) {
-      startTableUnexpandTransition(previousTable);
+      if (shouldExpandOnDaySelect) {
+        startTableUnexpandTransition(previousTable);
+      } else {
+        clearTableUnexpandTransition(previousTable);
+      }
       clearTableSelectionLayout(previousTable);
     }
     clearCanvasZoom();
@@ -968,7 +1017,12 @@ export function initInfiniteCalendar(container) {
       }
       requestAnimationFrame(() => {
         if (!selectedCell || selectedCell !== cell || !cell.isConnected) return;
-        applyTableSelectionLayout(table, rowIndex, colIndex);
+        if (shouldExpandOnDaySelect) {
+          applyTableSelectionLayout(table, rowIndex, colIndex);
+        } else {
+          clearTableUnexpandTransition(table);
+          clearTableSelectionLayout(table);
+        }
         applyCanvasZoomForCell(selectedCell);
       });
       return;
@@ -1210,6 +1264,10 @@ export function initInfiniteCalendar(container) {
     scrollToPresentDay,
     setActiveCalendar,
     getActiveCalendarId: () => activeCalendarId,
+    setPanZoomOnDaySelect,
+    getPanZoomOnDaySelect: () => shouldPanZoomOnDaySelect,
+    setExpandOnDaySelect,
+    getExpandOnDaySelect: () => shouldExpandOnDaySelect,
     setCellExpansionX,
     getCellExpansionX: () => cellExpansionX,
     setCellExpansionY,

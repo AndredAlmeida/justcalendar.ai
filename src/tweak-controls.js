@@ -13,12 +13,16 @@ import {
 const CELL_EXPANSION_X_STORAGE_KEY = "justcal-cell-expansion-x";
 const CELL_EXPANSION_Y_STORAGE_KEY = "justcal-cell-expansion-y";
 const CAMERA_ZOOM_STORAGE_KEY = "justcal-camera-zoom";
+const CAMERA_PAN_ZOOM_ON_SELECT_STORAGE_KEY = "justcal-camera-panzoom-on-select";
+const CELL_EXPAND_ON_SELECT_STORAGE_KEY = "justcal-cell-expand-on-select";
 const FADE_DELTA_STORAGE_KEY = "justcal-fade-delta";
 const LEGACY_CELL_EXPANSION_STORAGE_KEY = "justcal-cell-expansion";
 const LEGACY_SELECTION_EXPANSION_STORAGE_KEY = "justcal-selection-expansion";
 const MIN_FADE_DELTA = 0;
 const MAX_FADE_DELTA = 100;
 const DEFAULT_FADE_DELTA = 1;
+const DEFAULT_CAMERA_PAN_ZOOM_ON_SELECT = true;
+const DEFAULT_CELL_EXPAND_ON_SELECT = true;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -38,6 +42,27 @@ function getStoredNumericValue(storageKey) {
 function saveNumericValue(storageKey, value) {
   try {
     localStorage.setItem(storageKey, String(value));
+  } catch {
+    // Ignore storage failures; controls still work in-memory.
+  }
+}
+
+function getStoredBooleanValue(storageKey) {
+  try {
+    const rawValue = localStorage.getItem(storageKey);
+    if (rawValue === null) return null;
+    const normalizedValue = rawValue.trim().toLowerCase();
+    if (normalizedValue === "true") return true;
+    if (normalizedValue === "false") return false;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function saveBooleanValue(storageKey, value) {
+  try {
+    localStorage.setItem(storageKey, value ? "true" : "false");
   } catch {
     // Ignore storage failures; controls still work in-memory.
   }
@@ -88,6 +113,8 @@ export function setupTweakControls({
   onCellExpansionYChange,
   onCellExpansionChange,
   onCameraZoomChange,
+  onCameraPanZoomOnSelectChange,
+  onCellExpandOnSelectChange,
   onFadeDeltaChange,
   onSelectionExpansionChange,
 } = {}) {
@@ -95,6 +122,10 @@ export function setupTweakControls({
   const controlsCloseButton = document.getElementById("tweak-controls-close");
   const cameraZoomInput = document.getElementById("selection-camera-zoom");
   const cameraZoomOutput = document.getElementById("selection-camera-zoom-value");
+  const cameraPanZoomInput = document.getElementById("selection-camera-panzoom");
+  const cameraPanZoomOutput = document.getElementById("selection-camera-panzoom-value");
+  const cellExpandInput = document.getElementById("selection-cell-expand");
+  const cellExpandOutput = document.getElementById("selection-cell-expand-value");
   const expansionXInput = document.getElementById("selection-expand-x");
   const expansionXOutput = document.getElementById("selection-expand-x-value");
   const expansionYInput = document.getElementById("selection-expand-y");
@@ -185,6 +216,16 @@ export function setupTweakControls({
     MIN_FADE_DELTA,
     MAX_FADE_DELTA,
   );
+  const storedCameraPanZoomOnSelect = getStoredBooleanValue(
+    CAMERA_PAN_ZOOM_ON_SELECT_STORAGE_KEY,
+  );
+  const initialCameraPanZoomOnSelect =
+    storedCameraPanZoomOnSelect ?? DEFAULT_CAMERA_PAN_ZOOM_ON_SELECT;
+  const storedCellExpandOnSelect = getStoredBooleanValue(
+    CELL_EXPAND_ON_SELECT_STORAGE_KEY,
+  );
+  const initialCellExpandOnSelect =
+    storedCellExpandOnSelect ?? DEFAULT_CELL_EXPAND_ON_SELECT;
 
   const hasAxisExpansionHandlers =
     typeof onCellExpansionXChange === "function" ||
@@ -203,6 +244,28 @@ export function setupTweakControls({
     }
     onCameraZoomChange?.(clampedValue);
     saveNumericValue(CAMERA_ZOOM_STORAGE_KEY, clampedValue);
+  }
+
+  function applyCameraPanZoomOnSelect(nextValue) {
+    if (!(cameraPanZoomInput instanceof HTMLInputElement)) return;
+    const isEnabled = nextValue !== false;
+    cameraPanZoomInput.checked = isEnabled;
+    if (cameraPanZoomOutput) {
+      cameraPanZoomOutput.textContent = isEnabled ? "On" : "Off";
+    }
+    onCameraPanZoomOnSelectChange?.(isEnabled);
+    saveBooleanValue(CAMERA_PAN_ZOOM_ON_SELECT_STORAGE_KEY, isEnabled);
+  }
+
+  function applyCellExpandOnSelect(nextValue) {
+    if (!(cellExpandInput instanceof HTMLInputElement)) return;
+    const isEnabled = nextValue !== false;
+    cellExpandInput.checked = isEnabled;
+    if (cellExpandOutput) {
+      cellExpandOutput.textContent = isEnabled ? "On" : "Off";
+    }
+    onCellExpandOnSelectChange?.(isEnabled);
+    saveBooleanValue(CELL_EXPAND_ON_SELECT_STORAGE_KEY, isEnabled);
   }
 
   function notifyLegacyExpansionHandlers(value) {
@@ -265,6 +328,20 @@ export function setupTweakControls({
     applyCameraZoom(initialCameraZoom);
     cameraZoomInput.addEventListener("input", () => {
       applyCameraZoom(cameraZoomInput.value);
+    });
+  }
+
+  if (cameraPanZoomInput instanceof HTMLInputElement) {
+    applyCameraPanZoomOnSelect(initialCameraPanZoomOnSelect);
+    cameraPanZoomInput.addEventListener("change", () => {
+      applyCameraPanZoomOnSelect(cameraPanZoomInput.checked);
+    });
+  }
+
+  if (cellExpandInput instanceof HTMLInputElement) {
+    applyCellExpandOnSelect(initialCellExpandOnSelect);
+    cellExpandInput.addEventListener("change", () => {
+      applyCellExpandOnSelect(cellExpandInput.checked);
     });
   }
 

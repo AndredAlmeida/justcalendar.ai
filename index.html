@@ -304,6 +304,28 @@
         font-variant-numeric: tabular-nums;
       }
 
+      .tweak-control.tweak-control-toggle {
+        grid-template-columns: 4.9rem 1fr 2.8rem;
+      }
+
+      .tweak-toggle-field {
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--ink);
+      }
+
+      .tweak-toggle-field input[type="checkbox"] {
+        width: 1rem;
+        height: 1rem;
+        margin: 0;
+        accent-color: #3b82f6;
+        cursor: pointer;
+      }
+
       #calendar-scroll {
         --canvas-gap: 1rem;
         overflow-y: auto;
@@ -541,10 +563,16 @@
         position: absolute;
         left: 50%;
         top: 50%;
-        width: min(88%, 15rem);
-        display: inline-flex;
-        align-items: center;
-        gap: 0.45rem;
+        width: min(90%, 15.5rem);
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.34rem;
+        padding: 0.44rem 0.52rem 0.42rem;
+        border-radius: 14px;
+        border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
+        background: color-mix(in srgb, var(--panel) 78%, transparent);
+        box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 24%, transparent);
+        backdrop-filter: blur(2px);
         transform: translate(-50%, -50%);
         opacity: 0;
         pointer-events: none;
@@ -552,20 +580,131 @@
       }
 
       .day-score-slider {
+        --score-progress: 0%;
+        --score-track: color-mix(in srgb, var(--line) 52%, var(--panel) 48%);
+        --score-track-active: color-mix(in srgb, #3b82f6 58%, #22d3ee 42%);
+        --score-thumb: #3b82f6;
+        --score-thumb-contrast: color-mix(in srgb, var(--panel) 92%, #ffffff 8%);
+        -webkit-appearance: none;
+        appearance: none;
         width: 100%;
+        height: 0.36rem;
         margin: 0;
-        accent-color: #3b82f6;
+        border-radius: 999px;
+        border: 0;
+        padding: 0;
+        background: linear-gradient(
+          90deg,
+          var(--score-track-active) 0%,
+          var(--score-track-active) var(--score-progress),
+          var(--score-track) var(--score-progress),
+          var(--score-track) 100%
+        );
+        box-shadow:
+          inset 0 1px 2px rgba(15, 23, 42, 0.2),
+          inset 0 0 0 1px color-mix(in srgb, var(--line) 54%, transparent);
         cursor: pointer;
+        transition:
+          filter 0.18s ease,
+          box-shadow 0.18s ease;
+      }
+
+      .day-score-slider::-webkit-slider-runnable-track {
+        height: 0.36rem;
+        border-radius: 999px;
+        background: transparent;
+      }
+
+      .day-score-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 1.04rem;
+        height: 1.04rem;
+        border-radius: 999px;
+        border: 2px solid var(--score-thumb-contrast);
+        background: var(--score-thumb);
+        box-shadow: 0 1px 6px rgba(15, 23, 42, 0.32);
+        margin-top: calc((0.36rem - 1.04rem) / 2);
+        transition:
+          transform 0.16s ease,
+          border-color 0.16s ease,
+          background-color 0.16s ease,
+          box-shadow 0.16s ease;
+      }
+
+      .day-score-slider::-moz-range-track {
+        height: 0.36rem;
+        border-radius: 999px;
+        border: 0;
+        background: var(--score-track);
+      }
+
+      .day-score-slider::-moz-range-progress {
+        height: 0.36rem;
+        border-radius: 999px;
+        border: 0;
+        background: var(--score-track-active);
+      }
+
+      .day-score-slider::-moz-range-thumb {
+        width: 1.04rem;
+        height: 1.04rem;
+        border-radius: 999px;
+        border: 2px solid var(--score-thumb-contrast);
+        background: var(--score-thumb);
+        box-shadow: 0 1px 6px rgba(15, 23, 42, 0.32);
+        transition:
+          transform 0.16s ease,
+          border-color 0.16s ease,
+          background-color 0.16s ease,
+          box-shadow 0.16s ease;
+      }
+
+      .day-score-slider:hover {
+        filter: brightness(1.06);
+        box-shadow:
+          inset 0 1px 2px rgba(15, 23, 42, 0.24),
+          inset 0 0 0 1px color-mix(in srgb, var(--line) 66%, transparent);
+      }
+
+      .day-score-slider:hover::-webkit-slider-thumb {
+        background: var(--score-thumb-contrast);
+        border-color: var(--score-thumb);
+        box-shadow: 0 1px 8px rgba(15, 23, 42, 0.36);
+      }
+
+      .day-score-slider:hover::-moz-range-thumb {
+        background: var(--score-thumb-contrast);
+        border-color: var(--score-thumb);
+        box-shadow: 0 1px 8px rgba(15, 23, 42, 0.36);
+      }
+
+      .day-score-slider:active {
+        filter: brightness(1.12);
+      }
+
+      .day-score-slider:active::-webkit-slider-thumb {
+        transform: scale(1.22);
+      }
+
+      .day-score-slider:active::-moz-range-thumb {
+        transform: scale(1.22);
+      }
+
+      .day-score-slider:focus-visible {
+        outline: 2px solid #60a5fa;
+        outline-offset: 2px;
       }
 
       .day-score-value {
-        min-width: 2.35rem;
-        text-align: right;
-        font-size: 0.7rem;
+        min-width: 0;
+        text-align: center;
+        font-size: 0.66rem;
         font-weight: 700;
-        letter-spacing: 0.01em;
+        letter-spacing: 0.03em;
         font-variant-numeric: tabular-nums;
-        color: color-mix(in srgb, var(--ink) 88%, #ffffff 12%);
+        line-height: 1.1;
+        color: color-mix(in srgb, var(--ink) 84%, #ffffff 16%);
       }
 
       #calendar-scroll[data-calendar-type="signal-3"] td.day-cell .day-score-row {
@@ -742,6 +881,11 @@
           rgba(21, 128, 61, 0.98) 100%
         );
         border-color: rgba(134, 239, 172, 0.82);
+      }
+
+      #calendar-scroll[data-calendar-type="signal-3"] .day-state-btn {
+        width: calc(2.02rem * 0.6);
+        height: calc(2.02rem * 0.6);
       }
 
       td.day-cell.selected-day {
@@ -1739,7 +1883,10 @@
       }
 
       :root.dark .day-score-slider {
-        accent-color: #93c5fd;
+        --score-track: color-mix(in srgb, #020617 58%, #334155 42%);
+        --score-track-active: color-mix(in srgb, #60a5fa 70%, #22d3ee 30%);
+        --score-thumb: #60a5fa;
+        --score-thumb-contrast: color-mix(in srgb, #0f172a 88%, #f8fafc 12%);
       }
 
       :root.dark .day-score-value {
@@ -1808,6 +1955,20 @@
           font-size: 0.75rem;
         }
 
+        .tweak-control.tweak-control-toggle {
+          grid-template-columns: 4.2rem 1fr 2.45rem;
+        }
+
+        .tweak-toggle-field {
+          gap: 0.38rem;
+          font-size: 0.64rem;
+        }
+
+        .tweak-toggle-field input[type="checkbox"] {
+          width: 0.92rem;
+          height: 0.92rem;
+        }
+
         .brand-logo {
           height: 1.8rem;
           max-width: 70vw;
@@ -1848,18 +2009,24 @@
           font-size: 0.48rem;
         }
 
+        #calendar-scroll[data-calendar-type="signal-3"] .day-state-btn {
+          width: calc(0.9rem * 0.6);
+          height: calc(0.9rem * 0.6);
+        }
+
         .day-state-row {
           gap: 0.2rem;
         }
 
         .day-score-row {
-          width: min(92%, 11.5rem);
-          gap: 0.3rem;
+          width: min(92%, 11.6rem);
+          gap: 0.24rem;
+          padding: 0.32rem 0.38rem;
         }
 
         .day-score-value {
-          min-width: 1.9rem;
-          font-size: 0.58rem;
+          min-width: 0;
+          font-size: 0.54rem;
         }
 
         .day-close-btn {
@@ -2362,6 +2529,34 @@
           />
           <output id="selection-camera-zoom-value" for="selection-camera-zoom"
             >1.68x</output
+          >
+        </label>
+        <label class="tweak-control tweak-control-toggle" for="selection-camera-panzoom">
+          <span>Pan+Zoom</span>
+          <span class="tweak-toggle-field">
+            <input
+              id="selection-camera-panzoom"
+              type="checkbox"
+              checked
+            />
+            <span>On day click</span>
+          </span>
+          <output id="selection-camera-panzoom-value" for="selection-camera-panzoom"
+            >On</output
+          >
+        </label>
+        <label class="tweak-control tweak-control-toggle" for="selection-cell-expand">
+          <span>Cell Expand</span>
+          <span class="tweak-toggle-field">
+            <input
+              id="selection-cell-expand"
+              type="checkbox"
+              checked
+            />
+            <span>On day click</span>
+          </span>
+          <output id="selection-cell-expand-value" for="selection-cell-expand"
+            >On</output
           >
         </label>
         <label class="tweak-control" for="selection-expand-x">
