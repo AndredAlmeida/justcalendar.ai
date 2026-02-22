@@ -185,7 +185,11 @@ if (themeToggleButton) {
 }
 
 if (headerCalendarsButton) {
-  setupCalendarSwitcher(headerCalendarsButton);
+  setupCalendarSwitcher(headerCalendarsButton, {
+    onActiveCalendarChange: (calendar) => {
+      calendarApi?.setActiveCalendar(calendar?.id);
+    },
+  });
 }
 
 if (calendarContainer && returnToCurrentButton) {

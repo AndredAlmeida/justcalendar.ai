@@ -200,7 +200,7 @@
         height: 0.768rem;
         border-radius: 999px;
         flex: 0 0 0.768rem;
-        background: #3b82f6;
+        background: var(--calendar-dot-color, #3b82f6);
       }
 
       .calendar-current-name {
@@ -810,14 +810,15 @@
       }
 
       #calendar-switcher.is-expanded #calendar-options {
-        max-height: 12.4rem;
+        max-height: min(calc(100dvh - 7rem), 32rem);
         opacity: 1;
         transform: translateY(0);
         pointer-events: auto;
+        overflow-y: auto;
       }
 
       #calendar-switcher.is-expanded.is-adding #calendar-options {
-        max-height: 25rem;
+        max-height: min(calc(100dvh - 6rem), 36rem);
       }
 
       .calendar-options-title {
@@ -835,6 +836,10 @@
         height: 1px;
         margin: 0.08rem 0;
         background: color-mix(in srgb, var(--line) 88%, transparent);
+      }
+
+      #calendar-list {
+        display: grid;
       }
 
       .calendar-option {
@@ -895,7 +900,7 @@
         height: 0.68rem;
         border-radius: 999px;
         flex: 0 0 0.68rem;
-        background: #3b82f6;
+        background: var(--calendar-dot-color, #3b82f6);
       }
 
       .calendar-option-label {
@@ -912,6 +917,10 @@
         font-size: 0.86rem;
         line-height: 1;
         color: color-mix(in srgb, var(--ink) 82%, #ffffff 18%);
+      }
+
+      .calendar-option:not(.is-active) .calendar-option-check {
+        opacity: 0;
       }
 
       .calendar-option-action {
@@ -1583,11 +1592,11 @@
 
         #calendar-switcher.is-expanded #calendar-options {
           width: min(12.5rem, 72vw);
-          max-height: 11.8rem;
+          max-height: min(calc(100dvh - 6.4rem), 30rem);
         }
 
         #calendar-switcher.is-expanded.is-adding #calendar-options {
-          max-height: 22.8rem;
+          max-height: min(calc(100dvh - 5.8rem), 34rem);
         }
 
         #theme-switcher.is-expanded #theme-options {
@@ -1649,19 +1658,7 @@
           <div id="calendar-options" aria-label="Calendar options">
             <p class="calendar-options-title">Calendars</p>
             <div class="calendar-options-divider" aria-hidden="true"></div>
-            <button
-              type="button"
-              class="calendar-option calendar-option-main is-active"
-              data-calendar-type="signal-3"
-              aria-label="Energy Tracker"
-              aria-pressed="true"
-            >
-              <span class="calendar-option-left">
-                <span class="calendar-option-dot" aria-hidden="true"></span>
-                <span class="calendar-option-label">Energy Tracker</span>
-              </span>
-              <span class="calendar-option-check" aria-hidden="true">✓</span>
-            </button>
+            <div id="calendar-list"></div>
             <div class="calendar-options-divider" aria-hidden="true"></div>
             <div id="calendar-add-shell" class="calendar-add-shell">
               <button
@@ -1695,7 +1692,6 @@
                     <span class="calendar-add-field-label">Type</span>
                     <select id="new-calendar-type" class="calendar-add-select">
                       <option value="signal-3">Semaphore 🔴 🟡 🟢</option>
-                      <option value="score">Score</option>
                     </select>
                   </label>
                   <div class="calendar-add-field" aria-label="Color">

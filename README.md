@@ -72,7 +72,9 @@ Cloudflare SSL/TLS mode:
 
 The app persists state in `localStorage` using:
 
-- `justcal-day-states`
+- `justcal-calendars`
+- `justcal-calendar-day-states`
+- `justcal-day-states` (legacy key read for migration)
 - `justcal-theme`
 - `justcal-selection-expansion`
 
@@ -96,4 +98,3 @@ The app persists state in `localStorage` using:
 - If you run the app as a non-root user, either:
   - terminate TLS at Nginx/Caddy and proxy to a higher local port, or
   - grant Node permission to bind low ports.
-

@@ -33,7 +33,9 @@ export const MIN_CAMERA_ZOOM = 1;
 export const MAX_CAMERA_ZOOM = 3;
 export const DEFAULT_CAMERA_ZOOM = 1.68;
 
-const DAY_STATE_STORAGE_KEY = "justcal-day-states";
+const CALENDAR_DAY_STATES_STORAGE_KEY = "justcal-calendar-day-states";
+const LEGACY_DAY_STATE_STORAGE_KEY = "justcal-day-states";
+const DEFAULT_CALENDAR_ID = "energy-tracker";
 const DAY_STATES = ["x", "red", "yellow", "green"];
 const DEFAULT_DAY_STATE = "x";
 
@@ -63,22 +65,70 @@ function normalizeDayState(value) {
   return DAY_STATES.includes(value) ? value : DEFAULT_DAY_STATE;
 }
 
-function loadDayStates() {
-  try {
-    const rawValue = localStorage.getItem(DAY_STATE_STORAGE_KEY);
-    if (rawValue === null) return {};
+function normalizeDayStateEntries(rawDayStates) {
+  if (!rawDayStates || typeof rawDayStates !== "object") {
+    return {};
+  }
 
-    const parsed = JSON.parse(rawValue);
-    if (!parsed || typeof parsed !== "object") return {};
-    return parsed;
+  const normalizedDayStates = {};
+  Object.entries(rawDayStates).forEach(([dayKeyValue, rawDayState]) => {
+    if (typeof dayKeyValue !== "string" || dayKeyValue.length === 0) {
+      return;
+    }
+    const normalizedState = normalizeDayState(rawDayState);
+    if (normalizedState !== DEFAULT_DAY_STATE) {
+      normalizedDayStates[dayKeyValue] = normalizedState;
+    }
+  });
+  return normalizedDayStates;
+}
+
+function loadCalendarDayStates() {
+  try {
+    const rawValue = localStorage.getItem(CALENDAR_DAY_STATES_STORAGE_KEY);
+    if (rawValue !== null) {
+      const parsed = JSON.parse(rawValue);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return {};
+      }
+
+      const normalizedByCalendar = {};
+      Object.entries(parsed).forEach(([calendarId, calendarDayStates]) => {
+        if (typeof calendarId !== "string" || calendarId.length === 0) return;
+        normalizedByCalendar[calendarId] = normalizeDayStateEntries(calendarDayStates);
+      });
+      return normalizedByCalendar;
+    }
+  } catch {
+    return {};
+  }
+
+  // Migrate single-calendar storage from old releases.
+  try {
+    const legacyRawValue = localStorage.getItem(LEGACY_DAY_STATE_STORAGE_KEY);
+    if (legacyRawValue === null) {
+      return {};
+    }
+
+    const legacyParsed = JSON.parse(legacyRawValue);
+    if (!legacyParsed || typeof legacyParsed !== "object" || Array.isArray(legacyParsed)) {
+      return {};
+    }
+
+    return {
+      [DEFAULT_CALENDAR_ID]: normalizeDayStateEntries(legacyParsed),
+    };
   } catch {
     return {};
   }
 }
 
-function saveDayStates(dayStatesByKey) {
+function saveCalendarDayStates(dayStatesByCalendarId) {
   try {
-    localStorage.setItem(DAY_STATE_STORAGE_KEY, JSON.stringify(dayStatesByKey));
+    localStorage.setItem(
+      CALENDAR_DAY_STATES_STORAGE_KEY,
+      JSON.stringify(dayStatesByCalendarId),
+    );
   } catch {
     // Ignore storage errors; buttons still work in-memory.
   }
@@ -218,7 +268,7 @@ export function initInfiniteCalendar(container) {
   const now = new Date();
   const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const todayDayKey = formatDayKey(now.getFullYear(), now.getMonth(), now.getDate());
-  const dayStatesByKey = loadDayStates();
+  const dayStatesByCalendarId = loadCalendarDayStates();
   const tableBaseLayoutMap = new WeakMap();
   const cellDeselectFadeTimers = new WeakMap();
   const tableUnexpandTimers = new WeakMap();
@@ -236,9 +286,27 @@ export function initInfiniteCalendar(container) {
   let fastScrollFrame = 0;
   let zoomResetTimer = 0;
   let zoomResetHandler = null;
+  let activeCalendarId = DEFAULT_CALENDAR_ID;
+
+  function ensureActiveCalendarDayStates() {
+    if (!dayStatesByCalendarId[activeCalendarId]) {
+      dayStatesByCalendarId[activeCalendarId] = {};
+    }
+    return dayStatesByCalendarId[activeCalendarId];
+  }
 
   function getDayStateByKey(dayKeyValue) {
-    return normalizeDayState(dayStatesByKey[dayKeyValue]);
+    const activeDayStates = ensureActiveCalendarDayStates();
+    return normalizeDayState(activeDayStates[dayKeyValue]);
+  }
+
+  function refreshRenderedDayStates() {
+    const dayCells = calendarCanvas.querySelectorAll("td.day-cell[data-day-key]");
+    dayCells.forEach((dayCell) => {
+      const dayKeyValue = dayCell.dataset.dayKey;
+      if (!dayKeyValue) return;
+      applyDayStateToCell(dayCell, getDayStateByKey(dayKeyValue));
+    });
   }
 
   function setDayStateForCell(cell, nextState) {
@@ -246,9 +314,14 @@ export function initInfiniteCalendar(container) {
     if (!dayKeyValue) return;
 
     const normalizedState = normalizeDayState(nextState);
-    dayStatesByKey[dayKeyValue] = normalizedState;
+    const activeDayStates = ensureActiveCalendarDayStates();
+    if (normalizedState === DEFAULT_DAY_STATE) {
+      delete activeDayStates[dayKeyValue];
+    } else {
+      activeDayStates[dayKeyValue] = normalizedState;
+    }
     applyDayStateToCell(cell, normalizedState);
-    saveDayStates(dayStatesByKey);
+    saveCalendarDayStates(dayStatesByCalendarId);
   }
 
   function getTableStructure(table) {
@@ -675,6 +748,24 @@ export function initInfiniteCalendar(container) {
     return setCellExpansion(nextValue);
   }
 
+  function setActiveCalendar(nextCalendarId) {
+    const normalizedCalendarId =
+      typeof nextCalendarId === "string" && nextCalendarId.trim()
+        ? nextCalendarId.trim()
+        : DEFAULT_CALENDAR_ID;
+
+    const didChange = normalizedCalendarId !== activeCalendarId;
+    activeCalendarId = normalizedCalendarId;
+    ensureActiveCalendarDayStates();
+
+    if (didChange) {
+      clearSelectedDayCell();
+      refreshRenderedDayStates();
+    }
+
+    return activeCalendarId;
+  }
+
   function clearSelectedDayCell() {
     if (!selectedCell) return false;
 
@@ -929,6 +1020,8 @@ export function initInfiniteCalendar(container) {
   initialRender();
   return {
     scrollToPresentDay,
+    setActiveCalendar,
+    getActiveCalendarId: () => activeCalendarId,
     setCellExpansionX,
     getCellExpansionX: () => cellExpansionX,
     setCellExpansionY,
