@@ -1,0 +1,17 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 24 24"
+  role="img"
+  aria-label="Semaphore icon"
+>
+  <defs>
+    <clipPath id="semaphore-orb-clip">
+      <circle cx="12" cy="12" r="7.2" />
+    </clipPath>
+  </defs>
+  <g clip-path="url(#semaphore-orb-clip)">
+    <rect x="4.8" y="4.8" width="14.4" height="4.8" fill="#22c55e" />
+    <rect x="4.8" y="9.6" width="14.4" height="4.8" fill="#facc15" />
+    <rect x="4.8" y="14.4" width="14.4" height="4.8" fill="#ef4444" />
+  </g>
+</svg>

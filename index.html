@@ -893,6 +893,15 @@
         display: inline-flex;
         align-items: center;
         gap: 0.5rem;
+        flex: 1;
+      }
+
+      .calendar-option-name-wrap {
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.28rem;
+        flex: 1;
       }
 
       .calendar-option-dot {
@@ -905,6 +914,8 @@
 
       .calendar-option-label {
         min-width: 0;
+        flex: 1;
+        white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
@@ -913,14 +924,20 @@
         font-weight: 700;
       }
 
-      .calendar-option-check {
-        font-size: 0.86rem;
-        line-height: 1;
-        color: color-mix(in srgb, var(--ink) 82%, #ffffff 18%);
-      }
-
-      .calendar-option:not(.is-active) .calendar-option-check {
-        opacity: 0;
+      .calendar-option-type-icon {
+        width: 0.8rem;
+        height: 0.8rem;
+        border-radius: 999px;
+        flex: 0 0 0.8rem;
+        background: linear-gradient(
+          180deg,
+          #22c55e 0%,
+          #22c55e 33.333%,
+          #facc15 33.333%,
+          #facc15 66.666%,
+          #ef4444 66.666%,
+          #ef4444 100%
+        );
       }
 
       .calendar-option-action {
@@ -945,8 +962,22 @@
         gap: calc(0.18rem + 6px);
       }
 
+      .calendar-edit-shell {
+        display: grid;
+        gap: 0.2rem;
+      }
+
+      .calendar-edit-shell.is-editing {
+        gap: calc(0.18rem + 6px);
+      }
+
       #calendar-switcher.is-adding .calendar-edit-divider,
       #calendar-switcher.is-adding #calendar-edit-trigger {
+        display: none;
+      }
+
+      #calendar-switcher.is-editing-calendar .calendar-edit-divider,
+      #calendar-switcher.is-editing-calendar .calendar-add-shell {
         display: none;
       }
 
@@ -962,7 +993,34 @@
           transform 0.18s ease;
       }
 
+      .calendar-edit-trigger {
+        max-height: 2.2rem;
+        overflow: hidden;
+        transition:
+          max-height 0.22s ease,
+          opacity 0.18s ease,
+          padding 0.18s ease,
+          border-width 0.18s ease,
+          box-shadow 0.18s ease,
+          transform 0.18s ease;
+      }
+
       .calendar-add-editor {
+        max-height: 0;
+        opacity: 0;
+        overflow: hidden;
+        pointer-events: none;
+        transform: translateY(-0.2rem);
+        padding: 0 0.82rem;
+        display: grid;
+        gap: 0.38rem;
+        transition:
+          max-height 0.24s ease,
+          opacity 0.18s ease,
+          transform 0.18s ease;
+      }
+
+      .calendar-edit-editor {
         max-height: 0;
         opacity: 0;
         overflow: hidden;
@@ -1012,7 +1070,28 @@
         transform: scale(0.98);
       }
 
+      .calendar-edit-shell.is-editing .calendar-edit-trigger {
+        max-height: 0;
+        min-height: 0;
+        opacity: 0;
+        pointer-events: none;
+        padding-top: 0;
+        padding-bottom: 0;
+        border-width: 0;
+        box-shadow: none;
+        transform: scale(0.98);
+      }
+
       .calendar-add-shell.is-editing .calendar-add-editor {
+        max-height: calc(22rem + 6px);
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+        padding-top: 3px;
+        padding-bottom: 3px;
+      }
+
+      .calendar-edit-shell.is-editing .calendar-edit-editor {
         max-height: calc(22rem + 6px);
         opacity: 1;
         pointer-events: auto;
@@ -1088,6 +1167,19 @@
 
       .calendar-add-select {
         cursor: pointer;
+      }
+
+      .calendar-add-type-display {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.34rem;
+      }
+
+      .calendar-add-type-icon {
+        width: 2.0em;
+        height: 2.0em;
+        flex: 0 0 2.0em;
+        display: block;
       }
 
       .calendar-add-color-options {
@@ -1690,9 +1782,27 @@
                   </label>
                   <label class="calendar-add-field" for="new-calendar-type">
                     <span class="calendar-add-field-label">Type</span>
-                    <select id="new-calendar-type" class="calendar-add-select">
-                      <option value="signal-3">Semaphore 🔴 🟡 🟢</option>
-                    </select>
+                    <div class="calendar-add-select calendar-add-type-display" aria-hidden="true">
+                      <svg
+                        class="calendar-add-type-icon"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <defs>
+                          <clipPath id="calendar-type-semaphore-orb-clip">
+                            <circle cx="12" cy="12" r="7.2" />
+                          </clipPath>
+                        </defs>
+                        <g clip-path="url(#calendar-type-semaphore-orb-clip)">
+                          <rect x="4.8" y="4.8" width="14.4" height="4.8" fill="#22c55e" />
+                          <rect x="4.8" y="9.6" width="14.4" height="4.8" fill="#facc15" />
+                          <rect x="4.8" y="14.4" width="14.4" height="4.8" fill="#ef4444" />
+                        </g>
+                      </svg>
+                      <span>Semaphore</span>
+                    </div>
+                    <input id="new-calendar-type" type="hidden" value="signal-3" />
                   </label>
                   <div class="calendar-add-field" aria-label="Color">
                     <span class="calendar-add-field-label">Color</span>
@@ -1807,26 +1917,155 @@
               class="calendar-options-divider calendar-edit-divider"
               aria-hidden="true"
             ></div>
-            <button
-              id="calendar-edit-trigger"
-              type="button"
-              class="calendar-option calendar-option-action"
-              data-calendar-action="edit"
-              aria-label="Edit"
-            >
-              <span class="calendar-option-icon" aria-hidden="true">✎</span>
-              <span class="calendar-option-label">Edit</span>
-            </button>
+            <div id="calendar-edit-shell" class="calendar-edit-shell">
+              <button
+                id="calendar-edit-trigger"
+                type="button"
+                class="calendar-option calendar-option-action calendar-edit-trigger"
+                data-calendar-action="edit"
+                aria-label="Edit"
+              >
+                <span class="calendar-option-icon" aria-hidden="true">✎</span>
+                <span class="calendar-option-label">Edit</span>
+              </button>
+              <div
+                id="calendar-edit-editor"
+                class="calendar-edit-editor"
+                aria-label="Edit Calendar"
+              >
+                <div class="calendar-add-panel">
+                  <p class="calendar-add-title">Edit Calendar</p>
+                  <label class="calendar-add-field" for="edit-calendar-name">
+                    <span class="calendar-add-field-label">Name</span>
+                    <input
+                      id="edit-calendar-name"
+                      class="calendar-add-input"
+                      type="text"
+                      placeholder="Calendar name"
+                      autocomplete="off"
+                    />
+                  </label>
+                  <div class="calendar-add-field" aria-label="Color">
+                    <span class="calendar-add-field-label">Color</span>
+                    <div
+                      id="edit-calendar-color"
+                      class="calendar-add-color-options"
+                      role="radiogroup"
+                      aria-label="Calendar color"
+                    >
+                      <button
+                        type="button"
+                        class="calendar-color-option"
+                        data-color="gray"
+                        aria-label="Gray"
+                        aria-pressed="false"
+                      >
+                        <span
+                          class="calendar-color-dot"
+                          style="--color-dot: #9ca3af"
+                          aria-hidden="true"
+                        ></span>
+                      </button>
+                      <button
+                        type="button"
+                        class="calendar-color-option"
+                        data-color="red"
+                        aria-label="Red"
+                        aria-pressed="false"
+                      >
+                        <span
+                          class="calendar-color-dot"
+                          style="--color-dot: #ef4444"
+                          aria-hidden="true"
+                        ></span>
+                      </button>
+                      <button
+                        type="button"
+                        class="calendar-color-option"
+                        data-color="orange"
+                        aria-label="Orange"
+                        aria-pressed="false"
+                      >
+                        <span
+                          class="calendar-color-dot"
+                          style="--color-dot: #f97316"
+                          aria-hidden="true"
+                        ></span>
+                      </button>
+                      <button
+                        type="button"
+                        class="calendar-color-option"
+                        data-color="yellow"
+                        aria-label="Yellow"
+                        aria-pressed="false"
+                      >
+                        <span
+                          class="calendar-color-dot"
+                          style="--color-dot: #facc15"
+                          aria-hidden="true"
+                        ></span>
+                      </button>
+                      <button
+                        type="button"
+                        class="calendar-color-option"
+                        data-color="cyan"
+                        aria-label="Cyan"
+                        aria-pressed="false"
+                      >
+                        <span
+                          class="calendar-color-dot"
+                          style="--color-dot: #22d3ee"
+                          aria-hidden="true"
+                        ></span>
+                      </button>
+                      <button
+                        type="button"
+                        class="calendar-color-option"
+                        data-color="blue"
+                        aria-label="Blue"
+                        aria-pressed="false"
+                      >
+                        <span
+                          class="calendar-color-dot"
+                          style="--color-dot: #3b82f6"
+                          aria-hidden="true"
+                        ></span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="calendar-add-actions">
+                    <button
+                      id="calendar-edit-save"
+                      type="button"
+                      class="calendar-option calendar-action-btn"
+                      aria-label="Save"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      id="calendar-edit-cancel"
+                      class="calendar-option calendar-action-btn"
+                      aria-label="Cancel"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <button
-            id="header-calendars-btn"
-            type="button"
-            aria-label="Energy Tracker"
-            aria-expanded="false"
-          >
-            <span class="calendar-current-dot" aria-hidden="true"></span>
-            <span class="calendar-current-name">Energy Tracker</span>
-          </button>
+          <span class="tooltip-target tooltip-left" data-tooltip="Calendar Options">
+            <button
+              id="header-calendars-btn"
+              type="button"
+              aria-label="Energy Tracker"
+              aria-expanded="false"
+            >
+              <span class="calendar-current-dot" aria-hidden="true"></span>
+              <span class="calendar-current-name">Energy Tracker</span>
+            </button>
+          </span>
         </div>
       </header>
       <section id="tweak-controls" aria-label="Day selection controls" hidden>

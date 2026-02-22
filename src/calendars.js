@@ -143,6 +143,17 @@ function saveCalendarsState({ calendars, activeCalendarId }) {
   }
 }
 
+function createCalendarTypeIconElement(calendarType) {
+  if (calendarType !== SUPPORTED_CALENDAR_TYPE) {
+    return null;
+  }
+
+  const typeIcon = document.createElement("span");
+  typeIcon.className = "calendar-option-type-icon";
+  typeIcon.setAttribute("aria-hidden", "true");
+  return typeIcon;
+}
+
 function createCalendarOptionElement(calendar, isActive) {
   const optionButton = document.createElement("button");
   optionButton.type = "button";
@@ -165,14 +176,18 @@ function createCalendarOptionElement(calendar, isActive) {
   label.className = "calendar-option-label";
   label.textContent = calendar.name;
 
-  left.append(dot, label);
+  const nameWrap = document.createElement("span");
+  nameWrap.className = "calendar-option-name-wrap";
+  nameWrap.append(label);
 
-  const check = document.createElement("span");
-  check.className = "calendar-option-check";
-  check.setAttribute("aria-hidden", "true");
-  check.textContent = "✓";
+  const typeIcon = createCalendarTypeIconElement(calendar.type);
+  if (typeIcon) {
+    nameWrap.append(typeIcon);
+  }
 
-  optionButton.append(left, check);
+  left.append(dot, nameWrap);
+
+  optionButton.append(left);
   return optionButton;
 }
 
@@ -245,6 +260,24 @@ function setAddCalendarEditorExpanded({
   }
 }
 
+function setEditCalendarEditorExpanded({
+  switcher,
+  editShell,
+  editEditor,
+  editNameInput,
+  isExpanded,
+} = {}) {
+  if (!switcher || !editShell || !editEditor) return;
+
+  switcher.classList.toggle("is-editing-calendar", isExpanded);
+  editShell.classList.toggle("is-editing", isExpanded);
+  editEditor.setAttribute("aria-hidden", String(!isExpanded));
+
+  if (!isExpanded && editNameInput) {
+    editNameInput.value = "";
+  }
+}
+
 export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
   const switcher = document.getElementById("calendar-switcher");
   const calendarList = document.getElementById("calendar-list");
@@ -259,17 +292,35 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
   const addColorButtons = addColorOptions
     ? [...addColorOptions.querySelectorAll(".calendar-color-option")]
     : [];
+  const editShell = document.getElementById("calendar-edit-shell");
+  const editTrigger = document.getElementById("calendar-edit-trigger");
+  const editEditor = document.getElementById("calendar-edit-editor");
+  const editSaveButton = document.getElementById("calendar-edit-save");
+  const editCancelButton = document.getElementById("calendar-edit-cancel");
+  const editNameInput = document.getElementById("edit-calendar-name");
+  const editColorOptions = document.getElementById("edit-calendar-color");
+  const editColorButtons = editColorOptions
+    ? [...editColorOptions.querySelectorAll(".calendar-color-option")]
+    : [];
 
   if (!switcher || !button || !calendarList) {
     return;
   }
 
-  const flashMissingName = () => {
-    if (!addNameInput) return;
-    addNameInput.classList.remove("is-error-flash");
+  const flashMissingInput = (targetInput) => {
+    if (!targetInput) return;
+    targetInput.classList.remove("is-error-flash");
     // Force reflow so repeated clicks replay the animation.
-    void addNameInput.offsetWidth;
-    addNameInput.classList.add("is-error-flash");
+    void targetInput.offsetWidth;
+    targetInput.classList.add("is-error-flash");
+  };
+
+  const flashMissingName = () => {
+    flashMissingInput(addNameInput);
+  };
+
+  const flashMissingEditName = () => {
+    flashMissingInput(editNameInput);
   };
 
   const setActiveColor = (nextButton) => {
@@ -288,6 +339,29 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
 
   const resetAddColor = () => {
     setActiveColor(defaultColorButton);
+  };
+
+  const setActiveEditColor = (nextButton) => {
+    if (!nextButton) return;
+    editColorButtons.forEach((candidateButton) => {
+      const isActive = candidateButton === nextButton;
+      candidateButton.classList.toggle("is-active", isActive);
+      candidateButton.setAttribute("aria-pressed", String(isActive));
+    });
+  };
+
+  const defaultEditColorButton =
+    editColorButtons.find((candidateButton) => {
+      return candidateButton.dataset.color === DEFAULT_NEW_CALENDAR_COLOR;
+    }) || editColorButtons[0];
+
+  const setEditColorByKey = (colorKey) => {
+    const normalizedColor = normalizeCalendarColor(colorKey);
+    const matchingButton =
+      editColorButtons.find((candidateButton) => {
+        return candidateButton.dataset.color === normalizedColor;
+      }) || defaultEditColorButton;
+    setActiveEditColor(matchingButton);
   };
 
   const state = loadCalendarsState();
@@ -365,13 +439,49 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
     resetAddColor();
   };
 
+  const resetEditEditor = () => {
+    setEditCalendarEditorExpanded({
+      switcher,
+      editShell,
+      editEditor,
+      editNameInput,
+      isExpanded: false,
+    });
+    if (editNameInput) {
+      editNameInput.classList.remove("is-error-flash");
+    }
+    setEditColorByKey(DEFAULT_NEW_CALENDAR_COLOR);
+  };
+
+  const prefillEditEditorFromActiveCalendar = () => {
+    const activeCalendar = resolveActiveCalendar();
+    if (!activeCalendar) {
+      if (editNameInput) {
+        editNameInput.value = "";
+      }
+      setEditColorByKey(DEFAULT_NEW_CALENDAR_COLOR);
+      return;
+    }
+    if (editNameInput) {
+      editNameInput.value = activeCalendar.name;
+    }
+    setEditColorByKey(activeCalendar.color);
+  };
+
   addColorButtons.forEach((colorButton) => {
     colorButton.addEventListener("click", () => {
       setActiveColor(colorButton);
     });
   });
 
+  editColorButtons.forEach((colorButton) => {
+    colorButton.addEventListener("click", () => {
+      setActiveEditColor(colorButton);
+    });
+  });
+
   resetAddEditor();
+  resetEditEditor();
   syncCalendarUi();
   saveCalendarsState({
     calendars,
@@ -388,6 +498,7 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
     const nextCalendarId = optionButton.dataset.calendarId || "";
     setActiveCalendarId(nextCalendarId);
     resetAddEditor();
+    resetEditEditor();
     setCalendarSwitcherExpanded({
       switcher,
       button,
@@ -398,6 +509,7 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
 
   if (addTrigger && addShell && addEditor) {
     addTrigger.addEventListener("click", () => {
+      resetEditEditor();
       setAddCalendarEditorExpanded({
         switcher,
         addShell,
@@ -410,6 +522,21 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
     });
   }
 
+  if (editTrigger && editShell && editEditor) {
+    editTrigger.addEventListener("click", () => {
+      resetAddEditor();
+      prefillEditEditorFromActiveCalendar();
+      setEditCalendarEditorExpanded({
+        switcher,
+        editShell,
+        editEditor,
+        editNameInput,
+        isExpanded: true,
+      });
+      editNameInput?.focus();
+    });
+  }
+
   if (addCancelButton) {
     addCancelButton.addEventListener("click", () => {
       resetAddEditor();
@@ -417,8 +544,19 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
     });
   }
 
+  if (editCancelButton) {
+    editCancelButton.addEventListener("click", () => {
+      resetEditEditor();
+      editTrigger?.focus();
+    });
+  }
+
   addNameInput?.addEventListener("input", () => {
     addNameInput.classList.remove("is-error-flash");
+  });
+
+  editNameInput?.addEventListener("input", () => {
+    editNameInput.classList.remove("is-error-flash");
   });
 
   addNameInput?.addEventListener("animationend", (event) => {
@@ -426,6 +564,13 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
       return;
     }
     addNameInput.classList.remove("is-error-flash");
+  });
+
+  editNameInput?.addEventListener("animationend", (event) => {
+    if (event.animationName !== "calendar-add-input-error-flash") {
+      return;
+    }
+    editNameInput.classList.remove("is-error-flash");
   });
 
   if (addSubmitButton) {
@@ -470,11 +615,57 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
     });
   }
 
+  if (editSaveButton) {
+    editSaveButton.addEventListener("click", () => {
+      const activeCalendar = resolveActiveCalendar();
+      if (!activeCalendar) {
+        return;
+      }
+
+      const nextName = sanitizeCalendarName(editNameInput?.value);
+      if (!nextName) {
+        flashMissingEditName();
+        editNameInput?.focus();
+        return;
+      }
+
+      const selectedColorButton = editColorButtons.find((candidateButton) => {
+        return candidateButton.classList.contains("is-active");
+      });
+      const nextColor = normalizeCalendarColor(selectedColorButton?.dataset.color);
+
+      calendars = calendars.map((calendar) => {
+        if (calendar.id !== activeCalendar.id) {
+          return calendar;
+        }
+        return {
+          ...calendar,
+          name: nextName,
+          color: nextColor,
+        };
+      });
+
+      persistCalendarState();
+      syncCalendarUi();
+      notifyActiveCalendarChange();
+
+      resetEditEditor();
+      setCalendarSwitcherExpanded({
+        switcher,
+        button,
+        activeCalendar: resolveActiveCalendar(),
+        isExpanded: false,
+      });
+      button.focus();
+    });
+  }
+
   button.addEventListener("click", () => {
     const isExpanded = switcher.classList.contains("is-expanded");
     const nextExpanded = !isExpanded;
     if (!nextExpanded) {
       resetAddEditor();
+      resetEditEditor();
     }
     setCalendarSwitcherExpanded({
       switcher,
@@ -492,6 +683,7 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
       return;
     }
     resetAddEditor();
+    resetEditEditor();
     setCalendarSwitcherExpanded({
       switcher,
       button,
@@ -508,6 +700,7 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
       return;
     }
     resetAddEditor();
+    resetEditEditor();
     setCalendarSwitcherExpanded({
       switcher,
       button,
