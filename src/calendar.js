@@ -39,6 +39,7 @@ const DEFAULT_CALENDAR_ID = "energy-tracker";
 const CALENDAR_TYPE_SIGNAL = "signal-3";
 const CALENDAR_TYPE_SCORE = "score";
 const CALENDAR_TYPE_CHECK = "check";
+const CALENDAR_TYPE_NOTES = "notes";
 const DEFAULT_CALENDAR_TYPE = CALENDAR_TYPE_SIGNAL;
 const DAY_STATES = ["x", "red", "yellow", "green"];
 const DEFAULT_DAY_STATE = "x";
@@ -70,7 +71,11 @@ function formatDayKey(year, monthIndex, dayNumber) {
 }
 
 function normalizeDayState(value) {
-  return DAY_STATES.includes(value) ? value : DEFAULT_DAY_STATE;
+  if (typeof value !== "string") {
+    return DEFAULT_DAY_STATE;
+  }
+  const normalizedValue = value.trim().toLowerCase();
+  return DAY_STATES.includes(normalizedValue) ? normalizedValue : DEFAULT_DAY_STATE;
 }
 
 function normalizeCalendarType(calendarType) {
@@ -84,6 +89,9 @@ function normalizeCalendarType(calendarType) {
   }
   if (normalizedCalendarType === CALENDAR_TYPE_CHECK) {
     return CALENDAR_TYPE_CHECK;
+  }
+  if (normalizedCalendarType === CALENDAR_TYPE_NOTES) {
+    return CALENDAR_TYPE_NOTES;
   }
   return CALENDAR_TYPE_SIGNAL;
 }
@@ -122,6 +130,17 @@ function normalizeCheckValue(value) {
   );
 }
 
+function normalizeDayNoteValue(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value;
+}
+
+function hasDayNoteValue(noteValue) {
+  return normalizeDayNoteValue(noteValue).trim().length > 0;
+}
+
 function normalizeCalendarDayEntries(rawDayStates) {
   if (!rawDayStates || typeof rawDayStates !== "object") {
     return {};
@@ -133,24 +152,22 @@ function normalizeCalendarDayEntries(rawDayStates) {
       return;
     }
 
-    const rawValue =
-      typeof rawDayValue === "string" ? rawDayValue.trim().toLowerCase() : rawDayValue;
-
-    const normalizedState = normalizeDayState(rawValue);
-    if (normalizedState !== DEFAULT_DAY_STATE) {
-      normalizedDayEntries[dayKeyValue] = normalizedState;
+    if (typeof rawDayValue === "string") {
+      if (rawDayValue.trim().length > 0) {
+        normalizedDayEntries[dayKeyValue] = rawDayValue;
+      }
       return;
     }
 
-    const normalizedScore = normalizeScoreValue(rawValue);
-    if (normalizedScore !== SCORE_UNASSIGNED) {
-      normalizedDayEntries[dayKeyValue] = normalizedScore;
+    if (typeof rawDayValue === "number") {
+      if (Number.isFinite(rawDayValue)) {
+        normalizedDayEntries[dayKeyValue] = rawDayValue;
+      }
       return;
     }
 
-    const normalizedCheck = normalizeCheckValue(rawDayValue);
-    if (normalizedCheck === CHECK_MARKED) {
-      normalizedDayEntries[dayKeyValue] = true;
+    if (rawDayValue === CHECK_MARKED) {
+      normalizedDayEntries[dayKeyValue] = CHECK_MARKED;
     }
   });
   return normalizedDayEntries;
@@ -257,11 +274,20 @@ function syncDayScoreControls(cell, scoreValue) {
   }
 }
 
+function syncDayNoteControl(cell, noteValue) {
+  const normalizedNote = normalizeDayNoteValue(noteValue);
+  const noteInput = cell.querySelector(".day-note-input");
+  if (noteInput instanceof HTMLTextAreaElement && noteInput.value !== normalizedNote) {
+    noteInput.value = normalizedNote;
+  }
+}
+
 function applyDayStateToCell(cell, dayState) {
   const normalizedState = normalizeDayState(dayState);
   cell.dataset.dayState = normalizedState;
   delete cell.dataset.dayScore;
   delete cell.dataset.dayChecked;
+  delete cell.dataset.dayNote;
 
   const stateButtons = cell.querySelectorAll(".day-state-btn");
   stateButtons.forEach((button) => {
@@ -270,30 +296,49 @@ function applyDayStateToCell(cell, dayState) {
     button.setAttribute("aria-pressed", String(isActive));
   });
   syncDayScoreControls(cell, SCORE_UNASSIGNED);
+  syncDayNoteControl(cell, "");
 }
 
 function applyDayScoreToCell(cell, dayScore) {
   const normalizedScore = normalizeScoreValue(dayScore);
   delete cell.dataset.dayState;
   delete cell.dataset.dayChecked;
+  delete cell.dataset.dayNote;
   if (normalizedScore === SCORE_UNASSIGNED) {
     delete cell.dataset.dayScore;
   } else {
     cell.dataset.dayScore = String(normalizedScore);
   }
   syncDayScoreControls(cell, normalizedScore);
+  syncDayNoteControl(cell, "");
 }
 
 function applyDayCheckToCell(cell, dayCheckValue) {
   const isChecked = normalizeCheckValue(dayCheckValue);
   delete cell.dataset.dayState;
   delete cell.dataset.dayScore;
+  delete cell.dataset.dayNote;
   if (isChecked) {
     cell.dataset.dayChecked = "true";
   } else {
     delete cell.dataset.dayChecked;
   }
   syncDayScoreControls(cell, SCORE_UNASSIGNED);
+  syncDayNoteControl(cell, "");
+}
+
+function applyDayNoteToCell(cell, dayNoteValue) {
+  const normalizedNote = normalizeDayNoteValue(dayNoteValue);
+  delete cell.dataset.dayState;
+  delete cell.dataset.dayScore;
+  delete cell.dataset.dayChecked;
+  if (hasDayNoteValue(normalizedNote)) {
+    cell.dataset.dayNote = "1";
+  } else {
+    delete cell.dataset.dayNote;
+  }
+  syncDayScoreControls(cell, SCORE_UNASSIGNED);
+  syncDayNoteControl(cell, normalizedNote);
 }
 
 function applyDayValueToCell(cell, dayValue, calendarType) {
@@ -304,6 +349,10 @@ function applyDayValueToCell(cell, dayValue, calendarType) {
   }
   if (normalizedCalendarType === CALENDAR_TYPE_CHECK) {
     applyDayCheckToCell(cell, dayValue);
+    return;
+  }
+  if (normalizedCalendarType === CALENDAR_TYPE_NOTES) {
+    applyDayNoteToCell(cell, dayValue);
     return;
   }
   applyDayStateToCell(cell, dayValue);
@@ -414,10 +463,26 @@ function buildMonthCard(monthStart, getDayValueByKey, todayDayKey, calendarType)
 
         dayScoreRow.append(dayScoreSlider, dayScoreValue);
 
+        const dayNoteRow = document.createElement("div");
+        dayNoteRow.className = "day-note-row";
+
+        const dayNoteInput = document.createElement("textarea");
+        dayNoteInput.className = "day-note-input";
+        dayNoteInput.rows = 4;
+        dayNoteInput.placeholder = "Write a note...";
+        dayNoteInput.setAttribute("aria-label", "Write note for this day");
+        dayNoteInput.value =
+          normalizedCalendarType === CALENDAR_TYPE_NOTES
+            ? normalizeDayNoteValue(dayValue)
+            : "";
+
+        dayNoteRow.append(dayNoteInput);
+
         td.appendChild(dayCellContent);
         td.appendChild(closeDayButton);
         td.appendChild(dayStateRow);
         td.appendChild(dayScoreRow);
+        td.appendChild(dayNoteRow);
         applyDayValueToCell(td, dayValue, normalizedCalendarType);
 
         dayNumber += 1;
@@ -483,6 +548,9 @@ export function initInfiniteCalendar(container) {
     if (activeCalendarType === CALENDAR_TYPE_CHECK) {
       return normalizeCheckValue(rawDayValue);
     }
+    if (activeCalendarType === CALENDAR_TYPE_NOTES) {
+      return normalizeDayNoteValue(rawDayValue);
+    }
     return normalizeDayState(rawDayValue);
   }
 
@@ -537,6 +605,21 @@ export function initInfiniteCalendar(container) {
       delete activeDayStates[dayKeyValue];
     }
     applyDayValueToCell(cell, isChecked, CALENDAR_TYPE_CHECK);
+    saveCalendarDayStates(dayStatesByCalendarId);
+  }
+
+  function setDayNoteForCell(cell, nextNoteValue) {
+    const dayKeyValue = cell.dataset.dayKey;
+    if (!dayKeyValue) return;
+
+    const normalizedNote = normalizeDayNoteValue(nextNoteValue);
+    const activeDayStates = ensureActiveCalendarDayStates();
+    if (hasDayNoteValue(normalizedNote)) {
+      activeDayStates[dayKeyValue] = normalizedNote;
+    } else {
+      delete activeDayStates[dayKeyValue];
+    }
+    applyDayValueToCell(cell, normalizedNote, CALENDAR_TYPE_NOTES);
     saveCalendarDayStates(dayStatesByCalendarId);
   }
 
@@ -1275,6 +1358,14 @@ export function initInfiniteCalendar(container) {
     const eventElement = event.target instanceof Element ? event.target : null;
     const dayScoreSlider = eventElement?.closest("input.day-score-slider");
     if (!(dayScoreSlider instanceof HTMLInputElement) || !container.contains(dayScoreSlider)) {
+      const dayNoteInput = eventElement?.closest("textarea.day-note-input");
+      if (!(dayNoteInput instanceof HTMLTextAreaElement) || !container.contains(dayNoteInput)) {
+        return;
+      }
+
+      const dayCell = dayNoteInput.closest("td.day-cell");
+      if (!dayCell || !container.contains(dayCell)) return;
+      setDayNoteForCell(dayCell, dayNoteInput.value);
       return;
     }
 

@@ -211,12 +211,6 @@ setupTweakControls({
   onCameraZoomChange: (nextZoom) => {
     calendarApi?.setCameraZoom(nextZoom);
   },
-  onCameraPanZoomOnSelectChange: (isEnabled) => {
-    calendarApi?.setPanZoomOnDaySelect(isEnabled);
-  },
-  onCellExpandOnSelectChange: (isEnabled) => {
-    calendarApi?.setExpandOnDaySelect(isEnabled);
-  },
   onFadeDeltaChange: (nextFadeDelta) => {
     applyAppBackgroundFadeDelta(nextFadeDelta);
   },

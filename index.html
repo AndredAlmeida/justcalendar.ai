@@ -579,6 +579,48 @@
         transition: opacity 0.2s ease;
       }
 
+      .day-note-row {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: min(90%, 15.5rem);
+        display: grid;
+        grid-template-columns: 1fr;
+        transform: translate(-50%, -50%);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+      }
+
+      .day-note-input {
+        width: 100%;
+        min-height: 6.2rem;
+        max-height: min(15rem, 42vh);
+        border-radius: 12px;
+        border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
+        background: color-mix(in srgb, var(--panel) 84%, transparent);
+        box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent);
+        color: color-mix(in srgb, var(--ink) 90%, #ffffff 10%);
+        font: inherit;
+        font-size: 0.76rem;
+        line-height: 1.35;
+        resize: vertical;
+        padding: 0.5rem 0.56rem;
+        outline: none;
+        user-select: text;
+      }
+
+      .day-note-input::placeholder {
+        color: color-mix(in srgb, var(--line) 84%, var(--ink) 16%);
+      }
+
+      .day-note-input:focus {
+        border-color: color-mix(in srgb, #3b82f6 72%, var(--line) 28%);
+        box-shadow:
+          0 0 0 2px color-mix(in srgb, #3b82f6 24%, transparent),
+          inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent);
+      }
+
       .day-score-slider {
         --score-progress: 0%;
         --score-track: color-mix(in srgb, var(--line) 52%, var(--panel) 48%);
@@ -739,9 +781,26 @@
         pointer-events: auto;
       }
 
+      #calendar-scroll[data-calendar-type="notes"] td.day-cell .day-state-row,
+      #calendar-scroll[data-calendar-type="notes"] td.day-cell .day-score-row {
+        display: none;
+      }
+
+      #calendar-scroll[data-calendar-type="notes"] td.day-cell.selected-day .day-note-row {
+        opacity: 1;
+        pointer-events: auto;
+        transition-delay: 0.12s;
+      }
+
       #calendar-scroll[data-calendar-type="check"] td.day-cell .day-state-row,
       #calendar-scroll[data-calendar-type="check"] td.day-cell .day-score-row,
+      #calendar-scroll[data-calendar-type="check"] td.day-cell .day-note-row,
       #calendar-scroll[data-calendar-type="check"] td.day-cell .day-close-btn {
+        display: none;
+      }
+
+      #calendar-scroll[data-calendar-type="signal-3"] td.day-cell .day-note-row,
+      #calendar-scroll[data-calendar-type="score"] td.day-cell .day-note-row {
         display: none;
       }
 
@@ -794,6 +853,18 @@
         line-height: 1;
         opacity: 1;
         transform: translate(-50%, -50%);
+      }
+
+      #calendar-scroll[data-calendar-type="notes"] td.day-cell[data-day-note]:not(.selected-day)::after {
+        left: auto;
+        top: 0.34rem;
+        right: 0.34rem;
+        width: 0.56rem;
+        height: 0.56rem;
+        border-radius: 999px;
+        opacity: 1;
+        transform: none;
+        background: #3b82f6;
       }
 
       td.day-cell[data-day-checked="true"]::after {
@@ -1209,6 +1280,21 @@
 
       .calendar-option-type-icon.is-check::before {
         content: "\2713";
+      }
+
+      .calendar-option-type-icon.is-notes {
+        display: inline-grid;
+        place-items: center;
+        background: color-mix(in srgb, var(--muted) 82%, #3b82f6 18%);
+        border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+        color: color-mix(in srgb, #3b82f6 74%, #ffffff 26%);
+        font-size: 0.63rem;
+        font-weight: 850;
+        line-height: 1;
+      }
+
+      .calendar-option-type-icon.is-notes::before {
+        content: "\270E";
       }
 
       .calendar-option-action {
@@ -1953,8 +2039,29 @@
         color: #c7d2fe;
       }
 
+      :root.dark .day-note-input {
+        border-color: color-mix(in srgb, #475569 56%, transparent);
+        background: color-mix(in srgb, #0f172a 84%, transparent);
+        color: #dbeafe;
+      }
+
+      :root.dark .day-note-input::placeholder {
+        color: color-mix(in srgb, #94a3b8 86%, #dbeafe 14%);
+      }
+
+      :root.dark .day-note-input:focus {
+        border-color: color-mix(in srgb, #60a5fa 72%, #334155 28%);
+        box-shadow:
+          0 0 0 2px color-mix(in srgb, #60a5fa 24%, transparent),
+          inset 0 1px 0 color-mix(in srgb, #ffffff 16%, transparent);
+      }
+
       :root.dark td.day-cell[data-day-checked="true"]::after {
         color: color-mix(in srgb, #86efac 76%, #f8fafc 24%);
+      }
+
+      :root.dark #calendar-scroll[data-calendar-type="notes"] td.day-cell[data-day-note]:not(.selected-day)::after {
+        background: #60a5fa;
       }
 
       :root.dark td.day-cell.selected-day {
@@ -2082,6 +2189,17 @@
           width: min(92%, 11.6rem);
           gap: 0.24rem;
           padding: 0.32rem 0.38rem;
+        }
+
+        .day-note-row {
+          width: min(92%, 11.6rem);
+        }
+
+        .day-note-input {
+          min-height: 4.9rem;
+          font-size: 0.62rem;
+          padding: 0.36rem 0.42rem;
+          border-radius: 10px;
         }
 
         .day-score-value {
@@ -2238,6 +2356,7 @@
                       <option value="signal-3">Semaphore</option>
                       <option value="score">Score</option>
                       <option value="check">Check</option>
+                      <option value="notes">Notes</option>
                     </select>
                   </label>
                   <div class="calendar-add-field" aria-label="Color">
@@ -2590,34 +2709,6 @@
           />
           <output id="selection-camera-zoom-value" for="selection-camera-zoom"
             >1.68x</output
-          >
-        </label>
-        <label class="tweak-control tweak-control-toggle" for="selection-camera-panzoom">
-          <span>Pan+Zoom</span>
-          <span class="tweak-toggle-field">
-            <input
-              id="selection-camera-panzoom"
-              type="checkbox"
-              checked
-            />
-            <span>On day click</span>
-          </span>
-          <output id="selection-camera-panzoom-value" for="selection-camera-panzoom"
-            >On</output
-          >
-        </label>
-        <label class="tweak-control tweak-control-toggle" for="selection-cell-expand">
-          <span>Cell Expand</span>
-          <span class="tweak-toggle-field">
-            <input
-              id="selection-cell-expand"
-              type="checkbox"
-              checked
-            />
-            <span>On day click</span>
-          </span>
-          <output id="selection-cell-expand-value" for="selection-cell-expand"
-            >On</output
           >
         </label>
         <label class="tweak-control" for="selection-expand-x">
