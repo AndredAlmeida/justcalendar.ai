@@ -942,7 +942,7 @@
       .calendar-add-panel {
         display: grid;
         gap: 0.38rem;
-        padding: 0.46rem 0.52rem 0.52rem;
+        padding: 0.52rem;
         border-radius: 10px;
         border: 0;
         background: rgb(0 0 0 / 20%);
@@ -966,10 +966,12 @@
       }
 
       .calendar-add-shell.is-editing .calendar-add-editor {
-        max-height: 22rem;
+        max-height: calc(22rem + 6px);
         opacity: 1;
         pointer-events: auto;
         transform: translateY(0);
+        padding-top: 3px;
+        padding-bottom: 3px;
       }
 
       .calendar-add-title {
