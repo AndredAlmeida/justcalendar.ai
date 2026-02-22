@@ -1021,6 +1021,22 @@
         color: var(--line);
       }
 
+      .calendar-add-input.is-error-flash {
+        animation: calendar-add-input-error-flash 0.24s ease-in-out;
+      }
+
+      @keyframes calendar-add-input-error-flash {
+        0% {
+          background-color: var(--panel);
+        }
+        45% {
+          background-color: color-mix(in srgb, var(--panel) 55%, #ef4444 45%);
+        }
+        100% {
+          background-color: var(--panel);
+        }
+      }
+
       .calendar-add-select {
         cursor: pointer;
       }
@@ -1732,6 +1748,7 @@
                   </div>
                   <div class="calendar-add-actions">
                     <button
+                      id="calendar-add-submit"
                       type="button"
                       class="calendar-option calendar-action-btn"
                       aria-label="Add"

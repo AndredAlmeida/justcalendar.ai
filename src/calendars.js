@@ -76,6 +76,7 @@ export function setupCalendarSwitcher(button) {
   const addShell = document.getElementById("calendar-add-shell");
   const addTrigger = document.getElementById("calendar-add-trigger");
   const addEditor = document.getElementById("calendar-add-editor");
+  const addSubmitButton = document.getElementById("calendar-add-submit");
   const addCancelButton = document.getElementById("calendar-add-cancel");
   const addNameInput = document.getElementById("new-calendar-name");
   const addColorOptions = document.getElementById("new-calendar-color");
@@ -86,6 +87,16 @@ export function setupCalendarSwitcher(button) {
   if (!switcher || !button) {
     return;
   }
+
+  const flashMissingName = () => {
+    if (!addNameInput) {
+      return;
+    }
+    addNameInput.classList.remove("is-error-flash");
+    // Force reflow so repeated clicks replay the animation.
+    void addNameInput.offsetWidth;
+    addNameInput.classList.add("is-error-flash");
+  };
 
   const setActiveColor = (nextButton) => {
     if (!nextButton) {
@@ -144,6 +155,28 @@ export function setupCalendarSwitcher(button) {
     addCancelButton.addEventListener("click", () => {
       resetAddEditor();
       addTrigger?.focus();
+    });
+  }
+
+  addNameInput?.addEventListener("input", () => {
+    addNameInput.classList.remove("is-error-flash");
+  });
+
+  addNameInput?.addEventListener("animationend", (event) => {
+    if (event.animationName !== "calendar-add-input-error-flash") {
+      return;
+    }
+    addNameInput.classList.remove("is-error-flash");
+  });
+
+  if (addSubmitButton) {
+    addSubmitButton.addEventListener("click", () => {
+      const nextName = addNameInput?.value?.trim() || "";
+      if (nextName) {
+        return;
+      }
+      flashMissingName();
+      addNameInput?.focus();
     });
   }
 
