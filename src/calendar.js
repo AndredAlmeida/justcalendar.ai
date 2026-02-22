@@ -36,8 +36,14 @@ export const DEFAULT_CAMERA_ZOOM = 1.68;
 const CALENDAR_DAY_STATES_STORAGE_KEY = "justcal-calendar-day-states";
 const LEGACY_DAY_STATE_STORAGE_KEY = "justcal-day-states";
 const DEFAULT_CALENDAR_ID = "energy-tracker";
+const CALENDAR_TYPE_SIGNAL = "signal-3";
+const CALENDAR_TYPE_SCORE = "score";
+const DEFAULT_CALENDAR_TYPE = CALENDAR_TYPE_SIGNAL;
 const DAY_STATES = ["x", "red", "yellow", "green"];
 const DEFAULT_DAY_STATE = "x";
+const SCORE_UNASSIGNED = -1;
+const SCORE_MIN = SCORE_UNASSIGNED;
+const SCORE_MAX = 10;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -65,22 +71,57 @@ function normalizeDayState(value) {
   return DAY_STATES.includes(value) ? value : DEFAULT_DAY_STATE;
 }
 
-function normalizeDayStateEntries(rawDayStates) {
+function normalizeCalendarType(calendarType) {
+  if (typeof calendarType !== "string") {
+    return DEFAULT_CALENDAR_TYPE;
+  }
+
+  const normalizedCalendarType = calendarType.trim().toLowerCase();
+  if (normalizedCalendarType === CALENDAR_TYPE_SCORE) {
+    return CALENDAR_TYPE_SCORE;
+  }
+  return CALENDAR_TYPE_SIGNAL;
+}
+
+function normalizeScoreValue(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return SCORE_UNASSIGNED;
+  }
+
+  const roundedScore = Math.round(numericValue);
+  if (roundedScore < SCORE_MIN || roundedScore > SCORE_MAX) {
+    return SCORE_UNASSIGNED;
+  }
+  return roundedScore;
+}
+
+function normalizeCalendarDayEntries(rawDayStates) {
   if (!rawDayStates || typeof rawDayStates !== "object") {
     return {};
   }
 
-  const normalizedDayStates = {};
-  Object.entries(rawDayStates).forEach(([dayKeyValue, rawDayState]) => {
+  const normalizedDayEntries = {};
+  Object.entries(rawDayStates).forEach(([dayKeyValue, rawDayValue]) => {
     if (typeof dayKeyValue !== "string" || dayKeyValue.length === 0) {
       return;
     }
-    const normalizedState = normalizeDayState(rawDayState);
+
+    const rawValue =
+      typeof rawDayValue === "string" ? rawDayValue.trim().toLowerCase() : rawDayValue;
+
+    const normalizedState = normalizeDayState(rawValue);
     if (normalizedState !== DEFAULT_DAY_STATE) {
-      normalizedDayStates[dayKeyValue] = normalizedState;
+      normalizedDayEntries[dayKeyValue] = normalizedState;
+      return;
+    }
+
+    const normalizedScore = normalizeScoreValue(rawValue);
+    if (normalizedScore !== SCORE_UNASSIGNED) {
+      normalizedDayEntries[dayKeyValue] = normalizedScore;
     }
   });
-  return normalizedDayStates;
+  return normalizedDayEntries;
 }
 
 function loadCalendarDayStates() {
@@ -95,7 +136,7 @@ function loadCalendarDayStates() {
       const normalizedByCalendar = {};
       Object.entries(parsed).forEach(([calendarId, calendarDayStates]) => {
         if (typeof calendarId !== "string" || calendarId.length === 0) return;
-        normalizedByCalendar[calendarId] = normalizeDayStateEntries(calendarDayStates);
+        normalizedByCalendar[calendarId] = normalizeCalendarDayEntries(calendarDayStates);
       });
       return normalizedByCalendar;
     }
@@ -116,7 +157,7 @@ function loadCalendarDayStates() {
     }
 
     return {
-      [DEFAULT_CALENDAR_ID]: normalizeDayStateEntries(legacyParsed),
+      [DEFAULT_CALENDAR_ID]: normalizeCalendarDayEntries(legacyParsed),
     };
   } catch {
     return {};
@@ -153,9 +194,18 @@ function createDayStateButton(state, isActive) {
   return button;
 }
 
+function formatScoreLabel(scoreValue) {
+  const normalizedScore = normalizeScoreValue(scoreValue);
+  if (normalizedScore === SCORE_UNASSIGNED) {
+    return "Unassigned";
+  }
+  return String(normalizedScore);
+}
+
 function applyDayStateToCell(cell, dayState) {
   const normalizedState = normalizeDayState(dayState);
   cell.dataset.dayState = normalizedState;
+  delete cell.dataset.dayScore;
 
   const stateButtons = cell.querySelectorAll(".day-state-btn");
   stateButtons.forEach((button) => {
@@ -163,13 +213,51 @@ function applyDayStateToCell(cell, dayState) {
     button.classList.toggle("is-active", isActive);
     button.setAttribute("aria-pressed", String(isActive));
   });
+
+  const scoreSlider = cell.querySelector(".day-score-slider");
+  if (scoreSlider instanceof HTMLInputElement) {
+    scoreSlider.value = String(SCORE_UNASSIGNED);
+  }
+  const scoreValueLabel = cell.querySelector(".day-score-value");
+  if (scoreValueLabel) {
+    scoreValueLabel.textContent = formatScoreLabel(SCORE_UNASSIGNED);
+  }
 }
 
-function buildMonthCard(monthStart, getDayStateByKey, todayDayKey) {
+function applyDayScoreToCell(cell, dayScore) {
+  const normalizedScore = normalizeScoreValue(dayScore);
+  delete cell.dataset.dayState;
+  if (normalizedScore === SCORE_UNASSIGNED) {
+    delete cell.dataset.dayScore;
+  } else {
+    cell.dataset.dayScore = String(normalizedScore);
+  }
+
+  const scoreSlider = cell.querySelector(".day-score-slider");
+  if (scoreSlider instanceof HTMLInputElement) {
+    scoreSlider.value = String(normalizedScore);
+  }
+  const scoreValueLabel = cell.querySelector(".day-score-value");
+  if (scoreValueLabel) {
+    scoreValueLabel.textContent = formatScoreLabel(normalizedScore);
+  }
+}
+
+function applyDayValueToCell(cell, dayValue, calendarType) {
+  const normalizedCalendarType = normalizeCalendarType(calendarType);
+  if (normalizedCalendarType === CALENDAR_TYPE_SCORE) {
+    applyDayScoreToCell(cell, dayValue);
+    return;
+  }
+  applyDayStateToCell(cell, dayValue);
+}
+
+function buildMonthCard(monthStart, getDayValueByKey, todayDayKey, calendarType) {
   const year = monthStart.getFullYear();
   const monthIndex = monthStart.getMonth();
   const totalDays = daysInMonth(year, monthIndex);
   const firstWeekday = new Date(year, monthIndex, 1).getDay();
+  const normalizedCalendarType = normalizeCalendarType(calendarType);
 
   const card = document.createElement("section");
   card.className = "month-card";
@@ -214,9 +302,8 @@ function buildMonthCard(monthStart, getDayStateByKey, todayDayKey) {
         td.className = "day-cell";
 
         const dayKeyValue = formatDayKey(year, monthIndex, dayNumber);
-        const dayState = getDayStateByKey(dayKeyValue);
+        const dayValue = getDayValueByKey(dayKeyValue);
         td.dataset.dayKey = dayKeyValue;
-        td.dataset.dayState = dayState;
         if (dayKeyValue === todayDayKey) {
           td.classList.add("today-cell");
         }
@@ -240,13 +327,41 @@ function buildMonthCard(monthStart, getDayStateByKey, todayDayKey) {
         dayStateRow.className = "day-state-row";
 
         DAY_STATES.forEach((state) => {
-          const dayStateButton = createDayStateButton(state, state === dayState);
+          const dayStateButton = createDayStateButton(
+            state,
+            normalizedCalendarType === CALENDAR_TYPE_SIGNAL && state === normalizeDayState(dayValue),
+          );
           dayStateRow.appendChild(dayStateButton);
         });
+
+        const dayScoreRow = document.createElement("div");
+        dayScoreRow.className = "day-score-row";
+
+        const dayScoreSlider = document.createElement("input");
+        dayScoreSlider.type = "range";
+        dayScoreSlider.className = "day-score-slider";
+        dayScoreSlider.min = String(SCORE_MIN);
+        dayScoreSlider.max = String(SCORE_MAX);
+        dayScoreSlider.step = "1";
+        dayScoreSlider.value = String(
+          normalizedCalendarType === CALENDAR_TYPE_SCORE
+            ? normalizeScoreValue(dayValue)
+            : SCORE_UNASSIGNED,
+        );
+        dayScoreSlider.setAttribute("aria-label", "Set day score");
+
+        const dayScoreValue = document.createElement("span");
+        dayScoreValue.className = "day-score-value";
+        dayScoreValue.textContent = formatScoreLabel(dayScoreSlider.value);
+        dayScoreValue.setAttribute("aria-hidden", "true");
+
+        dayScoreRow.append(dayScoreSlider, dayScoreValue);
 
         td.appendChild(dayCellContent);
         td.appendChild(closeDayButton);
         td.appendChild(dayStateRow);
+        td.appendChild(dayScoreRow);
+        applyDayValueToCell(td, dayValue, normalizedCalendarType);
 
         dayNumber += 1;
       }
@@ -287,6 +402,7 @@ export function initInfiniteCalendar(container) {
   let zoomResetTimer = 0;
   let zoomResetHandler = null;
   let activeCalendarId = DEFAULT_CALENDAR_ID;
+  let activeCalendarType = DEFAULT_CALENDAR_TYPE;
 
   function ensureActiveCalendarDayStates() {
     if (!dayStatesByCalendarId[activeCalendarId]) {
@@ -295,17 +411,25 @@ export function initInfiniteCalendar(container) {
     return dayStatesByCalendarId[activeCalendarId];
   }
 
-  function getDayStateByKey(dayKeyValue) {
-    const activeDayStates = ensureActiveCalendarDayStates();
-    return normalizeDayState(activeDayStates[dayKeyValue]);
+  function applyActiveCalendarTypeToContainer() {
+    container.dataset.calendarType = activeCalendarType;
   }
 
-  function refreshRenderedDayStates() {
+  function getDayValueByKey(dayKeyValue) {
+    const activeDayStates = ensureActiveCalendarDayStates();
+    const rawDayValue = activeDayStates[dayKeyValue];
+    if (activeCalendarType === CALENDAR_TYPE_SCORE) {
+      return normalizeScoreValue(rawDayValue);
+    }
+    return normalizeDayState(rawDayValue);
+  }
+
+  function refreshRenderedDayValues() {
     const dayCells = calendarCanvas.querySelectorAll("td.day-cell[data-day-key]");
     dayCells.forEach((dayCell) => {
       const dayKeyValue = dayCell.dataset.dayKey;
       if (!dayKeyValue) return;
-      applyDayStateToCell(dayCell, getDayStateByKey(dayKeyValue));
+      applyDayValueToCell(dayCell, getDayValueByKey(dayKeyValue), activeCalendarType);
     });
   }
 
@@ -320,7 +444,22 @@ export function initInfiniteCalendar(container) {
     } else {
       activeDayStates[dayKeyValue] = normalizedState;
     }
-    applyDayStateToCell(cell, normalizedState);
+    applyDayValueToCell(cell, normalizedState, CALENDAR_TYPE_SIGNAL);
+    saveCalendarDayStates(dayStatesByCalendarId);
+  }
+
+  function setDayScoreForCell(cell, nextScore) {
+    const dayKeyValue = cell.dataset.dayKey;
+    if (!dayKeyValue) return;
+
+    const normalizedScore = normalizeScoreValue(nextScore);
+    const activeDayStates = ensureActiveCalendarDayStates();
+    if (normalizedScore === SCORE_UNASSIGNED) {
+      delete activeDayStates[dayKeyValue];
+    } else {
+      activeDayStates[dayKeyValue] = normalizedScore;
+    }
+    applyDayValueToCell(cell, normalizedScore, CALENDAR_TYPE_SCORE);
     saveCalendarDayStates(dayStatesByCalendarId);
   }
 
@@ -748,19 +887,33 @@ export function initInfiniteCalendar(container) {
     return setCellExpansion(nextValue);
   }
 
-  function setActiveCalendar(nextCalendarId) {
-    const normalizedCalendarId =
-      typeof nextCalendarId === "string" && nextCalendarId.trim()
-        ? nextCalendarId.trim()
-        : DEFAULT_CALENDAR_ID;
+  function setActiveCalendar(nextCalendar) {
+    const normalizedCalendarIdRaw =
+      typeof nextCalendar === "string"
+        ? nextCalendar
+        : typeof nextCalendar?.id === "string"
+          ? nextCalendar.id
+          : "";
+    const normalizedCalendarTypeRaw =
+      typeof nextCalendar === "object" && nextCalendar !== null
+        ? nextCalendar.type
+        : DEFAULT_CALENDAR_TYPE;
 
-    const didChange = normalizedCalendarId !== activeCalendarId;
+    const normalizedCalendarId =
+      normalizedCalendarIdRaw.trim() || DEFAULT_CALENDAR_ID;
+    const normalizedCalendarType = normalizeCalendarType(normalizedCalendarTypeRaw);
+
+    const didChange =
+      normalizedCalendarId !== activeCalendarId ||
+      normalizedCalendarType !== activeCalendarType;
     activeCalendarId = normalizedCalendarId;
+    activeCalendarType = normalizedCalendarType;
+    applyActiveCalendarTypeToContainer();
     ensureActiveCalendarDayStates();
 
     if (didChange) {
       clearSelectedDayCell();
-      refreshRenderedDayStates();
+      refreshRenderedDayValues();
     }
 
     return activeCalendarId;
@@ -828,7 +981,12 @@ export function initInfiniteCalendar(container) {
     const fragment = document.createDocumentFragment();
     const addedCards = [];
     for (let i = 1; i <= count; i += 1) {
-      const card = buildMonthCard(shiftMonth(latestMonth, i), getDayStateByKey, todayDayKey);
+      const card = buildMonthCard(
+        shiftMonth(latestMonth, i),
+        getDayValueByKey,
+        todayDayKey,
+        activeCalendarType,
+      );
       addedCards.push(card);
       fragment.appendChild(card);
     }
@@ -844,7 +1002,12 @@ export function initInfiniteCalendar(container) {
     const addedCards = [];
 
     for (let i = count; i >= 1; i -= 1) {
-      const card = buildMonthCard(shiftMonth(earliestMonth, -i), getDayStateByKey, todayDayKey);
+      const card = buildMonthCard(
+        shiftMonth(earliestMonth, -i),
+        getDayValueByKey,
+        todayDayKey,
+        activeCalendarType,
+      );
       addedCards.push(card);
       fragment.appendChild(card);
     }
@@ -944,7 +1107,14 @@ export function initInfiniteCalendar(container) {
   function initialRender() {
     const fragment = document.createDocumentFragment();
     for (let i = -INITIAL_MONTH_SPAN; i <= INITIAL_MONTH_SPAN; i += 1) {
-      fragment.appendChild(buildMonthCard(shiftMonth(currentMonth, i), getDayStateByKey, todayDayKey));
+      fragment.appendChild(
+        buildMonthCard(
+          shiftMonth(currentMonth, i),
+          getDayValueByKey,
+          todayDayKey,
+          activeCalendarType,
+        ),
+      );
     }
     calendarCanvas.appendChild(fragment);
 
@@ -974,10 +1144,27 @@ export function initInfiniteCalendar(container) {
     });
   });
 
+  container.addEventListener("input", (event) => {
+    const eventElement = event.target instanceof Element ? event.target : null;
+    const dayScoreSlider = eventElement?.closest("input.day-score-slider");
+    if (!(dayScoreSlider instanceof HTMLInputElement) || !container.contains(dayScoreSlider)) {
+      return;
+    }
+
+    const dayCell = dayScoreSlider.closest("td.day-cell");
+    if (!dayCell || !container.contains(dayCell)) return;
+    setDayScoreForCell(dayCell, dayScoreSlider.value);
+  });
+
   container.addEventListener("click", (event) => {
     const closeDayButton = event.target.closest("button.day-close-btn");
     if (closeDayButton && container.contains(closeDayButton)) {
       clearSelectedDayCell();
+      return;
+    }
+
+    const dayScoreControl = event.target.closest(".day-score-row");
+    if (dayScoreControl && container.contains(dayScoreControl)) {
       return;
     }
 
@@ -1017,6 +1204,7 @@ export function initInfiniteCalendar(container) {
     }
   });
 
+  applyActiveCalendarTypeToContainer();
   initialRender();
   return {
     scrollToPresentDay,

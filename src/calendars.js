@@ -3,7 +3,9 @@ const DEFAULT_CALENDAR_LABEL = "Energy Tracker";
 const DEFAULT_CALENDAR_ID = "energy-tracker";
 const DEFAULT_CALENDAR_COLOR = "blue";
 const DEFAULT_NEW_CALENDAR_COLOR = "gray";
-const SUPPORTED_CALENDAR_TYPE = "signal-3";
+const CALENDAR_TYPE_SIGNAL = "signal-3";
+const CALENDAR_TYPE_SCORE = "score";
+const DEFAULT_CALENDAR_TYPE = CALENDAR_TYPE_SIGNAL;
 const CALENDAR_BUTTON_LABEL = "Open calendars";
 const CALENDAR_CLOSE_LABEL = "Close calendars";
 const CALENDAR_COLOR_HEX_BY_KEY = Object.freeze({
@@ -19,7 +21,7 @@ function getDefaultCalendar() {
   return {
     id: DEFAULT_CALENDAR_ID,
     name: DEFAULT_CALENDAR_LABEL,
-    type: SUPPORTED_CALENDAR_TYPE,
+    type: DEFAULT_CALENDAR_TYPE,
     color: DEFAULT_CALENDAR_COLOR,
   };
 }
@@ -34,6 +36,21 @@ function hasOwnProperty(target, key) {
 
 function sanitizeCalendarName(rawName) {
   return String(rawName ?? "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeCalendarType(calendarType, fallbackType = DEFAULT_CALENDAR_TYPE) {
+  if (typeof calendarType !== "string") {
+    return fallbackType;
+  }
+
+  const normalizedCalendarType = calendarType.trim().toLowerCase();
+  if (normalizedCalendarType === CALENDAR_TYPE_SIGNAL) {
+    return CALENDAR_TYPE_SIGNAL;
+  }
+  if (normalizedCalendarType === CALENDAR_TYPE_SCORE) {
+    return CALENDAR_TYPE_SCORE;
+  }
+  return fallbackType;
 }
 
 function normalizeCalendarColor(colorKey, fallbackColor = DEFAULT_NEW_CALENDAR_COLOR) {
@@ -81,7 +98,7 @@ function normalizeStoredCalendar(rawCalendar, index, usedIds) {
   return {
     id: normalizedId,
     name: normalizedName,
-    type: SUPPORTED_CALENDAR_TYPE,
+    type: normalizeCalendarType(rawCalendar.type),
     color: normalizeCalendarColor(rawCalendar.color),
   };
 }
@@ -144,13 +161,16 @@ function saveCalendarsState({ calendars, activeCalendarId }) {
 }
 
 function createCalendarTypeIconElement(calendarType) {
-  if (calendarType !== SUPPORTED_CALENDAR_TYPE) {
-    return null;
-  }
-
+  const normalizedCalendarType = normalizeCalendarType(calendarType);
   const typeIcon = document.createElement("span");
   typeIcon.className = "calendar-option-type-icon";
   typeIcon.setAttribute("aria-hidden", "true");
+
+  if (normalizedCalendarType === CALENDAR_TYPE_SCORE) {
+    typeIcon.classList.add("is-score");
+    typeIcon.textContent = "S";
+  }
+
   return typeIcon;
 }
 
@@ -255,7 +275,7 @@ function setAddCalendarEditorExpanded({
       addNameInput.value = "";
     }
     if (addTypeSelect) {
-      addTypeSelect.value = SUPPORTED_CALENDAR_TYPE;
+      addTypeSelect.value = DEFAULT_CALENDAR_TYPE;
     }
   }
 }
@@ -752,10 +772,7 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
       const nextCalendar = {
         id: createUniqueCalendarId(nextName, usedIds),
         name: nextName,
-        type:
-          addTypeSelect?.value === SUPPORTED_CALENDAR_TYPE
-            ? SUPPORTED_CALENDAR_TYPE
-            : SUPPORTED_CALENDAR_TYPE,
+        type: normalizeCalendarType(addTypeSelect?.value),
         color: normalizeCalendarColor(selectedColorButton?.dataset.color),
       };
 

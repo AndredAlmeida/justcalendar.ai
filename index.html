@@ -537,6 +537,50 @@
         pointer-events: auto;
       }
 
+      .day-score-row {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: min(88%, 15rem);
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        transform: translate(-50%, -50%);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+      }
+
+      .day-score-slider {
+        width: 100%;
+        margin: 0;
+        accent-color: #3b82f6;
+        cursor: pointer;
+      }
+
+      .day-score-value {
+        min-width: 2.35rem;
+        text-align: right;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        font-variant-numeric: tabular-nums;
+        color: color-mix(in srgb, var(--ink) 88%, #ffffff 12%);
+      }
+
+      #calendar-scroll[data-calendar-type="signal-3"] td.day-cell .day-score-row {
+        display: none;
+      }
+
+      #calendar-scroll[data-calendar-type="score"] td.day-cell .day-state-row {
+        display: none;
+      }
+
+      #calendar-scroll[data-calendar-type="score"] td.day-cell.selected-day .day-score-row {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
       td.day-cell::after {
         content: "";
         position: absolute;
@@ -570,6 +614,22 @@
 
       td.day-cell[data-day-state="green"]:not(.selected-day)::after {
         background: hsl(142 88% 48%);
+      }
+
+      td.day-cell[data-day-score]:not(.selected-day)::after {
+        content: attr(data-day-score);
+        width: auto;
+        min-width: 1.05rem;
+        height: auto;
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+        color: color-mix(in srgb, var(--ink) 90%, #ffffff 10%);
+        font-size: 0.78rem;
+        font-weight: 750;
+        line-height: 1;
+        opacity: 1;
+        transform: translate(-50%, -50%);
       }
 
       td.day-cell:hover:not(.selected-day):not(.today-cell) {
@@ -938,6 +998,17 @@
           #ef4444 66.666%,
           #ef4444 100%
         );
+      }
+
+      .calendar-option-type-icon.is-score {
+        display: inline-grid;
+        place-items: center;
+        background: color-mix(in srgb, var(--muted) 84%, #f59e0b 16%);
+        border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+        color: color-mix(in srgb, var(--ink) 86%, #ffffff 14%);
+        font-size: 0.55rem;
+        font-weight: 800;
+        line-height: 1;
       }
 
       .calendar-option-action {
@@ -1667,6 +1738,18 @@
         filter: saturate(1.14) brightness(1.1);
       }
 
+      :root.dark .day-score-slider {
+        accent-color: #93c5fd;
+      }
+
+      :root.dark .day-score-value {
+        color: #dbeafe;
+      }
+
+      :root.dark td.day-cell[data-day-score]:not(.selected-day)::after {
+        color: #c7d2fe;
+      }
+
       :root.dark td.day-cell.selected-day {
         background: var(
           --selected-day-dark-gradient,
@@ -1767,6 +1850,16 @@
 
         .day-state-row {
           gap: 0.2rem;
+        }
+
+        .day-score-row {
+          width: min(92%, 11.5rem);
+          gap: 0.3rem;
+        }
+
+        .day-score-value {
+          min-width: 1.9rem;
+          font-size: 0.58rem;
         }
 
         .day-close-btn {
@@ -1914,27 +2007,10 @@
                   </label>
                   <label class="calendar-add-field" for="new-calendar-type">
                     <span class="calendar-add-field-label">Type</span>
-                    <div class="calendar-add-select calendar-add-type-display" aria-hidden="true">
-                      <svg
-                        class="calendar-add-type-icon"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                        focusable="false"
-                      >
-                        <defs>
-                          <clipPath id="calendar-type-semaphore-orb-clip">
-                            <circle cx="12" cy="12" r="7.2" />
-                          </clipPath>
-                        </defs>
-                        <g clip-path="url(#calendar-type-semaphore-orb-clip)">
-                          <rect x="4.8" y="4.8" width="14.4" height="4.8" fill="#22c55e" />
-                          <rect x="4.8" y="9.6" width="14.4" height="4.8" fill="#facc15" />
-                          <rect x="4.8" y="14.4" width="14.4" height="4.8" fill="#ef4444" />
-                        </g>
-                      </svg>
-                      <span>Semaphore</span>
-                    </div>
-                    <input id="new-calendar-type" type="hidden" value="signal-3" />
+                    <select id="new-calendar-type" class="calendar-add-select">
+                      <option value="signal-3">Semaphore</option>
+                      <option value="score">Score</option>
+                    </select>
                   </label>
                   <div class="calendar-add-field" aria-label="Color">
                     <span class="calendar-add-field-label">Color</span>
