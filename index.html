@@ -744,13 +744,13 @@
         width: 1.04rem;
         height: 1.04rem;
         border-radius: 999px;
-        border: 2px solid var(--score-thumb-contrast);
-        background: var(--score-thumb);
-        box-shadow: 0 1px 6px rgba(15, 23, 42, 0.32);
+        border: 0;
+        background: var(--score-track-active);
+        box-shadow:
+          0 1px 6px rgba(15, 23, 42, 0.32);
         margin-top: calc((0.36rem - 1.04rem) / 2);
         transition:
           transform 0.16s ease,
-          border-color 0.16s ease,
           background-color 0.16s ease,
           box-shadow 0.16s ease;
       }
@@ -773,12 +773,12 @@
         width: 1.04rem;
         height: 1.04rem;
         border-radius: 999px;
-        border: 2px solid var(--score-thumb-contrast);
-        background: var(--score-thumb);
-        box-shadow: 0 1px 6px rgba(15, 23, 42, 0.32);
+        border: 0;
+        background: var(--score-track-active);
+        box-shadow:
+          0 1px 6px rgba(15, 23, 42, 0.32);
         transition:
           transform 0.16s ease,
-          border-color 0.16s ease,
           background-color 0.16s ease,
           box-shadow 0.16s ease;
       }
@@ -791,15 +791,17 @@
       }
 
       .day-score-slider:hover::-webkit-slider-thumb {
-        background: var(--score-thumb-contrast);
-        border-color: var(--score-thumb);
-        box-shadow: 0 1px 8px rgba(15, 23, 42, 0.36);
+        background: color-mix(in srgb, var(--score-track-active) 84%, #ffffff 16%);
+        box-shadow:
+          0 1px 10px rgba(15, 23, 42, 0.38),
+          0 0 0 3px color-mix(in srgb, var(--score-track-active) 26%, transparent);
       }
 
       .day-score-slider:hover::-moz-range-thumb {
-        background: var(--score-thumb-contrast);
-        border-color: var(--score-thumb);
-        box-shadow: 0 1px 8px rgba(15, 23, 42, 0.36);
+        background: color-mix(in srgb, var(--score-track-active) 84%, #ffffff 16%);
+        box-shadow:
+          0 1px 10px rgba(15, 23, 42, 0.38),
+          0 0 0 3px color-mix(in srgb, var(--score-track-active) 26%, transparent);
       }
 
       .day-score-slider:active {
@@ -808,10 +810,18 @@
 
       .day-score-slider:active::-webkit-slider-thumb {
         transform: scale(1.22);
+        background: color-mix(in srgb, var(--score-track-active) 74%, #ffffff 26%);
+        box-shadow:
+          0 1px 12px rgba(15, 23, 42, 0.42),
+          0 0 0 4px color-mix(in srgb, var(--score-track-active) 36%, transparent);
       }
 
       .day-score-slider:active::-moz-range-thumb {
         transform: scale(1.22);
+        background: color-mix(in srgb, var(--score-track-active) 74%, #ffffff 26%);
+        box-shadow:
+          0 1px 12px rgba(15, 23, 42, 0.42),
+          0 0 0 4px color-mix(in srgb, var(--score-track-active) 36%, transparent);
       }
 
       .day-score-slider:focus-visible {
