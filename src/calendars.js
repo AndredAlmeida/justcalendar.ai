@@ -543,6 +543,43 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
     });
   };
 
+  const toggleCalendarPinnedAndReorder = (calendarId) => {
+    if (!calendarId) {
+      return false;
+    }
+
+    const targetIndex = calendars.findIndex((calendar) => calendar.id === calendarId);
+    if (targetIndex < 0) {
+      return false;
+    }
+
+    const targetCalendar = calendars[targetIndex];
+    const nextPinnedState = !normalizeCalendarPinned(targetCalendar.pinned);
+    const toggledCalendar = {
+      ...targetCalendar,
+      pinned: nextPinnedState,
+    };
+
+    const remainingCalendars = calendars.filter((calendar) => calendar.id !== calendarId);
+
+    if (nextPinnedState) {
+      calendars = [toggledCalendar, ...remainingCalendars];
+      return true;
+    }
+
+    const firstUnpinnedIndex = remainingCalendars.findIndex((calendar) => {
+      return !normalizeCalendarPinned(calendar.pinned);
+    });
+    const insertionIndex =
+      firstUnpinnedIndex >= 0 ? firstUnpinnedIndex : remainingCalendars.length;
+    calendars = [
+      ...remainingCalendars.slice(0, insertionIndex),
+      toggledCalendar,
+      ...remainingCalendars.slice(insertionIndex),
+    ];
+    return true;
+  };
+
   const setDeleteConfirmExpanded = ({ isExpanded, calendarName, calendarId } = {}) => {
     if (!editEditor || !editForm || !deleteConfirmEditor) {
       return;
@@ -577,13 +614,99 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
     }
   };
 
+  const readCalendarOptionRects = () => {
+    const rectsById = new Map();
+    calendarList
+      .querySelectorAll("button.calendar-option[data-calendar-id]")
+      .forEach((calendarOption) => {
+        const calendarId = calendarOption.dataset.calendarId || "";
+        if (!calendarId) {
+          return;
+        }
+        rectsById.set(calendarId, calendarOption.getBoundingClientRect());
+      });
+    return rectsById;
+  };
+
+  const animateCalendarListReorder = (previousRectsById) => {
+    if (!previousRectsById || previousRectsById.size <= 0) {
+      return;
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+
+    calendarList
+      .querySelectorAll("button.calendar-option[data-calendar-id]")
+      .forEach((calendarOption) => {
+        const calendarId = calendarOption.dataset.calendarId || "";
+        if (!calendarId) {
+          return;
+        }
+
+        const previousRect = previousRectsById.get(calendarId);
+        if (!previousRect) {
+          return;
+        }
+
+        const nextRect = calendarOption.getBoundingClientRect();
+        const deltaX = previousRect.left - nextRect.left;
+        const deltaY = previousRect.top - nextRect.top;
+        if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) {
+          return;
+        }
+
+        if (typeof calendarOption.animate === "function") {
+          calendarOption.animate(
+            [
+              {
+                transform: `translate(${deltaX}px, ${deltaY}px)`,
+              },
+              {
+                transform: "translate(0, 0)",
+              },
+            ],
+            {
+              duration: 240,
+              easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+              fill: "none",
+            },
+          );
+          return;
+        }
+
+        calendarOption.style.transition = "none";
+        calendarOption.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        // Force style flush so fallback transition starts from previous position.
+        void calendarOption.offsetWidth;
+        calendarOption.style.transition = "transform 240ms cubic-bezier(0.22, 1, 0.36, 1)";
+        calendarOption.style.transform = "translate(0, 0)";
+        const cleanupTransition = (event) => {
+          if (event.propertyName !== "transform") {
+            return;
+          }
+          calendarOption.style.transition = "";
+          calendarOption.style.transform = "";
+          calendarOption.removeEventListener("transitionend", cleanupTransition);
+        };
+        calendarOption.addEventListener("transitionend", cleanupTransition);
+      });
+  };
+
   const renderCalendarList = () => {
+    const previousRectsById = readCalendarOptionRects();
     const fragment = document.createDocumentFragment();
     calendars.forEach((calendar) => {
       const isActive = calendar.id === activeCalendarId;
       fragment.appendChild(createCalendarOptionElement(calendar, isActive));
     });
     calendarList.replaceChildren(fragment);
+    animateCalendarListReorder(previousRectsById);
   };
 
   const syncSwitcherButton = () => {
@@ -740,15 +863,10 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
         return;
       }
 
-      calendars = calendars.map((calendar) => {
-        if (calendar.id !== pinCalendarId) {
-          return calendar;
-        }
-        return {
-          ...calendar,
-          pinned: !normalizeCalendarPinned(calendar.pinned),
-        };
-      });
+      const didTogglePinned = toggleCalendarPinnedAndReorder(pinCalendarId);
+      if (!didTogglePinned) {
+        return;
+      }
       persistCalendarState();
       syncCalendarUi();
       return;
