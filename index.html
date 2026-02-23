@@ -2304,6 +2304,24 @@
         transform: translate(0, -50%);
       }
 
+      .tooltip-target.tooltip-bottom::after {
+        left: 50%;
+        right: auto;
+        top: calc(100% + 0.56rem + 5px);
+        bottom: auto;
+        transform: translate(-50%, -4px);
+      }
+
+      .tooltip-target.tooltip-bottom:hover::after,
+      .tooltip-target.tooltip-bottom:focus-visible::after {
+        transform: translate(-50%, 0);
+      }
+
+      #calendar-switcher.is-expanded .tooltip-target.tooltip-bottom::after {
+        opacity: 0;
+        transform: translate(-50%, -4px);
+      }
+
       #return-to-current svg,
       #theme-toggle svg {
         pointer-events: none;
@@ -3162,7 +3180,7 @@
               </div>
             </div>
           </div>
-          <span class="tooltip-target tooltip-left" data-tooltip="Calendar Options">
+          <span class="tooltip-target tooltip-bottom" data-tooltip="Calendar Options">
             <button
               id="header-calendars-btn"
               type="button"
