@@ -10,6 +10,7 @@ const CALENDAR_TYPE_NOTES = "notes";
 const DEFAULT_CALENDAR_TYPE = CALENDAR_TYPE_SIGNAL;
 const SCORE_DISPLAY_NUMBER = "number";
 const SCORE_DISPLAY_HEATMAP = "heatmap";
+const SCORE_DISPLAY_NUMBER_HEATMAP = "number-heatmap";
 const DEFAULT_SCORE_DISPLAY = SCORE_DISPLAY_NUMBER;
 const CALENDAR_BUTTON_LABEL = "Open calendars";
 const CALENDAR_CLOSE_LABEL = "Close calendars";
@@ -28,6 +29,7 @@ function getDefaultCalendar() {
     name: DEFAULT_CALENDAR_LABEL,
     type: DEFAULT_CALENDAR_TYPE,
     color: DEFAULT_CALENDAR_COLOR,
+    pinned: false,
   };
 }
 
@@ -71,6 +73,26 @@ function normalizeCalendarColor(colorKey, fallbackColor = DEFAULT_NEW_CALENDAR_C
   return fallbackColor;
 }
 
+function normalizeCalendarPinned(pinnedValue) {
+  if (pinnedValue === true) {
+    return true;
+  }
+  if (typeof pinnedValue === "number") {
+    return pinnedValue === 1;
+  }
+  if (typeof pinnedValue !== "string") {
+    return false;
+  }
+
+  const normalizedPinnedValue = pinnedValue.trim().toLowerCase();
+  return (
+    normalizedPinnedValue === "true" ||
+    normalizedPinnedValue === "1" ||
+    normalizedPinnedValue === "yes" ||
+    normalizedPinnedValue === "on"
+  );
+}
+
 function normalizeScoreDisplay(
   displayMode,
   fallbackDisplay = DEFAULT_SCORE_DISPLAY,
@@ -85,6 +107,9 @@ function normalizeScoreDisplay(
   }
   if (normalizedDisplayMode === SCORE_DISPLAY_HEATMAP) {
     return SCORE_DISPLAY_HEATMAP;
+  }
+  if (normalizedDisplayMode === SCORE_DISPLAY_NUMBER_HEATMAP) {
+    return SCORE_DISPLAY_NUMBER_HEATMAP;
   }
   return fallbackDisplay;
 }
@@ -132,6 +157,7 @@ function normalizeStoredCalendar(rawCalendar, index, usedIds) {
     name: normalizedName,
     type: normalizedCalendarType,
     color: normalizeCalendarColor(rawCalendar.color),
+    pinned: normalizeCalendarPinned(rawCalendar.pinned),
     ...(normalizedCalendarType === CALENDAR_TYPE_SCORE
       ? { display: normalizedScoreDisplay }
       : {}),
@@ -220,8 +246,10 @@ function createCalendarOptionElement(calendar, isActive) {
   optionButton.type = "button";
   optionButton.className = "calendar-option calendar-option-main";
   optionButton.classList.toggle("is-active", isActive);
+  optionButton.classList.toggle("is-pinned", normalizeCalendarPinned(calendar.pinned));
   optionButton.dataset.calendarType = calendar.type;
   optionButton.dataset.calendarId = calendar.id;
+  optionButton.dataset.calendarPinned = String(normalizeCalendarPinned(calendar.pinned));
   optionButton.setAttribute("aria-label", calendar.name);
   optionButton.setAttribute("aria-pressed", String(isActive));
 
@@ -247,8 +275,18 @@ function createCalendarOptionElement(calendar, isActive) {
   }
 
   left.append(dot, nameWrap);
+  const pinToggle = document.createElement("span");
+  pinToggle.className = "calendar-option-pin";
+  pinToggle.setAttribute("aria-hidden", "true");
+  pinToggle.title = normalizeCalendarPinned(calendar.pinned)
+    ? "Unpin calendar"
+    : "Pin calendar";
+  const pinIcon = document.createElement("span");
+  pinIcon.classList.add("calendar-option-pin-icon");
+  pinIcon.setAttribute("aria-hidden", "true");
+  pinToggle.append(pinIcon);
 
-  optionButton.append(left);
+  optionButton.append(left, pinToggle);
   return optionButton;
 }
 
@@ -348,6 +386,9 @@ function setEditCalendarEditorExpanded({
   editShell,
   editEditor,
   editNameInput,
+  editDisplayField,
+  editDisplaySelect,
+  activeCalendar,
   isExpanded,
 } = {}) {
   if (!switcher || !editShell || !editEditor) return;
@@ -355,6 +396,22 @@ function setEditCalendarEditorExpanded({
   switcher.classList.toggle("is-editing-calendar", isExpanded);
   editShell.classList.toggle("is-editing", isExpanded);
   editEditor.setAttribute("aria-hidden", String(!isExpanded));
+
+  const normalizedActiveCalendarType = normalizeCalendarType(activeCalendar?.type);
+  const shouldShowDisplayField =
+    isExpanded && normalizedActiveCalendarType === CALENDAR_TYPE_SCORE;
+  switcher.classList.toggle("has-score-display", shouldShowDisplayField);
+  editShell.classList.toggle("has-score-display", shouldShowDisplayField);
+
+  if (editDisplayField) {
+    editDisplayField.hidden = !shouldShowDisplayField;
+    editDisplayField.setAttribute("aria-hidden", String(!shouldShowDisplayField));
+  }
+  if (editDisplaySelect) {
+    editDisplaySelect.value = shouldShowDisplayField
+      ? normalizeScoreDisplay(activeCalendar?.display)
+      : DEFAULT_SCORE_DISPLAY;
+  }
 
   if (!isExpanded && editNameInput) {
     editNameInput.value = "";
@@ -385,6 +442,8 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
   const editCancelButton = document.getElementById("calendar-edit-cancel");
   const editDeleteButton = document.getElementById("calendar-edit-delete");
   const editNameInput = document.getElementById("edit-calendar-name");
+  const editDisplayField = document.getElementById("edit-calendar-display-field");
+  const editDisplaySelect = document.getElementById("edit-calendar-display");
   const editColorOptions = document.getElementById("edit-calendar-color");
   const editColorButtons = editColorOptions
     ? [...editColorOptions.querySelectorAll(".calendar-color-option")]
@@ -591,6 +650,9 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
       editShell,
       editEditor,
       editNameInput,
+      editDisplayField,
+      editDisplaySelect,
+      activeCalendar: null,
       isExpanded: false,
     });
     setDeleteConfirmExpanded({ isExpanded: false });
@@ -606,11 +668,17 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
       if (editNameInput) {
         editNameInput.value = "";
       }
+      if (editDisplaySelect) {
+        editDisplaySelect.value = DEFAULT_SCORE_DISPLAY;
+      }
       setEditColorByKey(DEFAULT_NEW_CALENDAR_COLOR);
       return;
     }
     if (editNameInput) {
       editNameInput.value = activeCalendar.name;
+    }
+    if (editDisplaySelect) {
+      editDisplaySelect.value = normalizeScoreDisplay(activeCalendar.display);
     }
     setEditColorByKey(activeCalendar.color);
   };
@@ -659,6 +727,33 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
   notifyActiveCalendarChange();
 
   calendarList.addEventListener("click", (event) => {
+    const pinToggle = event.target.closest(".calendar-option-pin");
+    if (pinToggle && calendarList.contains(pinToggle)) {
+      event.preventDefault();
+      event.stopPropagation();
+      const pinButton = pinToggle.closest("button.calendar-option[data-calendar-id]");
+      if (!pinButton || !calendarList.contains(pinButton)) {
+        return;
+      }
+      const pinCalendarId = pinButton.dataset.calendarId || "";
+      if (!pinCalendarId) {
+        return;
+      }
+
+      calendars = calendars.map((calendar) => {
+        if (calendar.id !== pinCalendarId) {
+          return calendar;
+        }
+        return {
+          ...calendar,
+          pinned: !normalizeCalendarPinned(calendar.pinned),
+        };
+      });
+      persistCalendarState();
+      syncCalendarUi();
+      return;
+    }
+
     const optionButton = event.target.closest("button.calendar-option[data-calendar-id]");
     if (!optionButton || !calendarList.contains(optionButton)) {
       return;
@@ -709,6 +804,7 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
   if (editTrigger && editShell && editEditor) {
     editTrigger.addEventListener("click", () => {
       resetAddEditor();
+      const activeCalendar = resolveActiveCalendar();
       prefillEditEditorFromActiveCalendar();
       setDeleteConfirmExpanded({ isExpanded: false });
       setEditCalendarEditorExpanded({
@@ -716,6 +812,9 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
         editShell,
         editEditor,
         editNameInput,
+        editDisplayField,
+        editDisplaySelect,
+        activeCalendar,
         isExpanded: true,
       });
       editNameInput?.focus();
@@ -857,6 +956,7 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
         name: nextName,
         type: nextCalendarType,
         color: normalizeCalendarColor(selectedColorButton?.dataset.color),
+        pinned: false,
         ...(nextCalendarType === CALENDAR_TYPE_SCORE
           ? {
               display: normalizeScoreDisplay(addDisplaySelect?.value),
@@ -914,10 +1014,16 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
         if (calendar.id !== activeCalendar.id) {
           return calendar;
         }
+        const activeCalendarType = normalizeCalendarType(activeCalendar.type);
         return {
           ...calendar,
           name: nextName,
           color: nextColor,
+          ...(activeCalendarType === CALENDAR_TYPE_SCORE
+            ? {
+                display: normalizeScoreDisplay(editDisplaySelect?.value),
+              }
+            : {}),
         };
       });
 

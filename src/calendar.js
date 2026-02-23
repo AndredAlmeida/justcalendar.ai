@@ -46,6 +46,10 @@ const DEFAULT_DAY_STATE = "x";
 const SCORE_UNASSIGNED = -1;
 const SCORE_MIN = SCORE_UNASSIGNED;
 const SCORE_MAX = 10;
+const SCORE_DISPLAY_NUMBER = "number";
+const SCORE_DISPLAY_HEATMAP = "heatmap";
+const SCORE_DISPLAY_NUMBER_HEATMAP = "number-heatmap";
+const DEFAULT_SCORE_DISPLAY = SCORE_DISPLAY_NUMBER;
 const CHECK_MARKED = true;
 const NOTES_HOVER_PREVIEW_DELAY_MS = 1000;
 const NOTES_HOVER_PREVIEW_GAP_PX = 8;
@@ -97,6 +101,21 @@ function normalizeCalendarType(calendarType) {
     return CALENDAR_TYPE_NOTES;
   }
   return CALENDAR_TYPE_SIGNAL;
+}
+
+function normalizeScoreDisplay(scoreDisplay) {
+  if (typeof scoreDisplay !== "string") {
+    return DEFAULT_SCORE_DISPLAY;
+  }
+
+  const normalizedScoreDisplay = scoreDisplay.trim().toLowerCase();
+  if (normalizedScoreDisplay === SCORE_DISPLAY_HEATMAP) {
+    return SCORE_DISPLAY_HEATMAP;
+  }
+  if (normalizedScoreDisplay === SCORE_DISPLAY_NUMBER_HEATMAP) {
+    return SCORE_DISPLAY_NUMBER_HEATMAP;
+  }
+  return SCORE_DISPLAY_NUMBER;
 }
 
 function normalizeScoreValue(value) {
@@ -275,6 +294,17 @@ function getScoreProgressPercent(scoreValue) {
   return `${progressPercent}%`;
 }
 
+function getScoreHeatIntensityPercent(scoreValue) {
+  const normalizedScore = normalizeScoreValue(scoreValue);
+  if (normalizedScore === SCORE_UNASSIGNED) {
+    return "0%";
+  }
+
+  const normalizedRange = clamp(normalizedScore / SCORE_MAX, 0, 1);
+  const intensityPercent = Math.round(12 + normalizedRange * 58);
+  return `${intensityPercent}%`;
+}
+
 function syncDayScoreControls(cell, scoreValue) {
   const normalizedScore = normalizeScoreValue(scoreValue);
 
@@ -306,6 +336,7 @@ function applyDayStateToCell(cell, dayState) {
   delete cell.dataset.dayChecked;
   delete cell.dataset.dayNote;
   delete cell.dataset.dayNotePreview;
+  cell.style.removeProperty("--score-heat-intensity");
 
   const stateButtons = cell.querySelectorAll(".day-state-btn");
   stateButtons.forEach((button) => {
@@ -325,8 +356,13 @@ function applyDayScoreToCell(cell, dayScore) {
   delete cell.dataset.dayNotePreview;
   if (normalizedScore === SCORE_UNASSIGNED) {
     delete cell.dataset.dayScore;
+    cell.style.removeProperty("--score-heat-intensity");
   } else {
     cell.dataset.dayScore = String(normalizedScore);
+    cell.style.setProperty(
+      "--score-heat-intensity",
+      getScoreHeatIntensityPercent(normalizedScore),
+    );
   }
   syncDayScoreControls(cell, normalizedScore);
   syncDayNoteControl(cell, "");
@@ -338,6 +374,7 @@ function applyDayCheckToCell(cell, dayCheckValue) {
   delete cell.dataset.dayScore;
   delete cell.dataset.dayNote;
   delete cell.dataset.dayNotePreview;
+  cell.style.removeProperty("--score-heat-intensity");
   if (isChecked) {
     cell.dataset.dayChecked = "true";
   } else {
@@ -352,6 +389,7 @@ function applyDayNoteToCell(cell, dayNoteValue) {
   delete cell.dataset.dayState;
   delete cell.dataset.dayScore;
   delete cell.dataset.dayChecked;
+  cell.style.removeProperty("--score-heat-intensity");
   if (hasDayNoteValue(normalizedNote)) {
     cell.dataset.dayNote = "1";
     cell.dataset.dayNotePreview = normalizeDayNotePreview(normalizedNote);
@@ -555,6 +593,7 @@ export function initInfiniteCalendar(container) {
   let zoomResetHandler = null;
   let activeCalendarId = DEFAULT_CALENDAR_ID;
   let activeCalendarType = DEFAULT_CALENDAR_TYPE;
+  let activeCalendarDisplay = DEFAULT_SCORE_DISPLAY;
   let shouldPanZoomOnDaySelect = true;
   let shouldExpandOnDaySelect = true;
   let hoveredNotesCell = null;
@@ -570,6 +609,11 @@ export function initInfiniteCalendar(container) {
 
   function applyActiveCalendarTypeToContainer() {
     container.dataset.calendarType = activeCalendarType;
+    if (activeCalendarType === CALENDAR_TYPE_SCORE) {
+      container.dataset.calendarDisplay = activeCalendarDisplay;
+      return;
+    }
+    delete container.dataset.calendarDisplay;
   }
 
   function clearNotesHoverPreviewTimer() {
@@ -1287,16 +1331,26 @@ export function initInfiniteCalendar(container) {
       typeof nextCalendar === "object" && nextCalendar !== null
         ? nextCalendar.type
         : DEFAULT_CALENDAR_TYPE;
+    const normalizedCalendarDisplayRaw =
+      typeof nextCalendar === "object" && nextCalendar !== null
+        ? nextCalendar.display
+        : DEFAULT_SCORE_DISPLAY;
 
     const normalizedCalendarId =
       normalizedCalendarIdRaw.trim() || DEFAULT_CALENDAR_ID;
     const normalizedCalendarType = normalizeCalendarType(normalizedCalendarTypeRaw);
+    const normalizedCalendarDisplay =
+      normalizedCalendarType === CALENDAR_TYPE_SCORE
+        ? normalizeScoreDisplay(normalizedCalendarDisplayRaw)
+        : DEFAULT_SCORE_DISPLAY;
 
     const didChange =
       normalizedCalendarId !== activeCalendarId ||
-      normalizedCalendarType !== activeCalendarType;
+      normalizedCalendarType !== activeCalendarType ||
+      normalizedCalendarDisplay !== activeCalendarDisplay;
     activeCalendarId = normalizedCalendarId;
     activeCalendarType = normalizedCalendarType;
+    activeCalendarDisplay = normalizedCalendarDisplay;
     applyActiveCalendarTypeToContainer();
     ensureActiveCalendarDayStates();
 

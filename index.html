@@ -921,6 +921,25 @@
         transform: translate(-50%, calc(-50% - 8px));
       }
 
+      #calendar-scroll[data-calendar-type="score"][data-calendar-display="heatmap"] td.day-cell[data-day-score]:not(.selected-day),
+      #calendar-scroll[data-calendar-type="score"][data-calendar-display="number-heatmap"] td.day-cell[data-day-score]:not(.selected-day) {
+        background: color-mix(
+          in srgb,
+          var(--score-slider-active) var(--score-heat-intensity, 0%),
+          var(--panel)
+        );
+      }
+
+      #calendar-scroll[data-calendar-type="score"][data-calendar-display="heatmap"] td.day-cell[data-day-score]:not(.selected-day)::after {
+        content: none;
+        display: none;
+      }
+
+      #calendar-scroll[data-calendar-type="score"][data-calendar-display="heatmap"] td.day-cell[data-day-score]:not(.selected-day):hover::after {
+        content: attr(data-day-score);
+        display: inline-grid;
+      }
+
       #calendar-scroll[data-calendar-type="notes"] td.day-cell .day-state-row,
       #calendar-scroll[data-calendar-type="notes"] td.day-cell .day-score-row {
         display: none;
@@ -1341,6 +1360,14 @@
         max-height: min(calc(100dvh - 3.2rem), 44rem);
       }
 
+      #calendar-switcher.is-expanded.is-editing-calendar #calendar-options {
+        max-height: min(calc(100dvh - 5.5rem), 37.2rem);
+      }
+
+      #calendar-switcher.is-expanded.is-editing-calendar.has-score-display #calendar-options {
+        max-height: min(calc(100dvh - 3.2rem), 40rem);
+      }
+
       .calendar-options-title {
         margin: 0;
         padding: 0.08rem 0.88rem 0.34rem;
@@ -1434,7 +1461,8 @@
 
       .calendar-option-label {
         min-width: 0;
-        flex: 1;
+        flex: 0 1 auto;
+        max-width: 100%;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1499,6 +1527,58 @@
 
       .calendar-option-type-icon.is-notes::before {
         content: "\270E";
+      }
+
+      .calendar-option-pin {
+        width: 0.96rem;
+        height: 0.96rem;
+        border-radius: 999px;
+        flex: 0 0 0.96rem;
+        display: inline-grid;
+        place-items: center;
+        color: color-mix(in srgb, var(--ink) 78%, transparent);
+        --pin-icon-dark: color-mix(in srgb, var(--ink) 28%, #000000 72%);
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.16s ease,
+          color 0.16s ease,
+          background-color 0.16s ease,
+          box-shadow 0.16s ease;
+      }
+
+      .calendar-option-pin-icon {
+        width: 0.74rem;
+        height: 0.74rem;
+        display: block;
+        background-color: var(--pin-icon-dark);
+        -webkit-mask: url("/pin-icon.svg") center / contain no-repeat;
+        mask: url("/pin-icon.svg") center / contain no-repeat;
+        transform: scale(1.5);
+        transform-origin: center;
+      }
+
+      .calendar-option-main.is-pinned .calendar-option-pin-icon {
+        background-color: currentColor;
+      }
+
+      .calendar-option-main:hover .calendar-option-pin,
+      .calendar-option-main.is-pinned .calendar-option-pin {
+        opacity: 0.86;
+        pointer-events: auto;
+      }
+
+      .calendar-option-pin:hover {
+        opacity: 1;
+        color: color-mix(in srgb, var(--ink) 92%, #ffffff 8%);
+        background: color-mix(in srgb, var(--muted) 88%, #ffffff 12%);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 72%, transparent);
+      }
+
+      .calendar-option-pin:active {
+        opacity: 1;
+        background: color-mix(in srgb, var(--muted) 92%, transparent);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 84%, transparent);
       }
 
       .calendar-option-action {
@@ -1675,12 +1755,16 @@
       }
 
       .calendar-edit-shell.is-editing .calendar-edit-editor {
-        max-height: calc(22rem + 6px);
+        max-height: calc(23rem + 6px);
         opacity: 1;
         pointer-events: auto;
         transform: translateY(0);
         padding-top: 3px;
         padding-bottom: 3px;
+      }
+
+      .calendar-edit-shell.is-editing.has-score-display .calendar-edit-editor {
+        max-height: calc(25.6rem + 6px);
       }
 
       .calendar-add-title {
@@ -2505,6 +2589,14 @@
           max-height: min(calc(100dvh - 2.2rem), 40rem);
         }
 
+        #calendar-switcher.is-expanded.is-editing-calendar #calendar-options {
+          max-height: min(calc(100dvh - 5.2rem), 35.2rem);
+        }
+
+        #calendar-switcher.is-expanded.is-editing-calendar.has-score-display #calendar-options {
+          max-height: min(calc(100dvh - 2.2rem), 37.8rem);
+        }
+
         #theme-switcher.is-expanded #theme-options {
           width: min(10.25rem, 62vw);
           max-height: 12rem;
@@ -2624,6 +2716,7 @@
                     <select id="new-calendar-display" class="calendar-add-select">
                       <option value="number">Number</option>
                       <option value="heatmap">Heatmap</option>
+                      <option value="number-heatmap">Number + Heatmap</option>
                     </select>
                   </label>
                   <div class="calendar-add-field" aria-label="Color">
@@ -2767,6 +2860,19 @@
                         placeholder="Calendar name"
                         autocomplete="off"
                       />
+                    </label>
+                    <label
+                      id="edit-calendar-display-field"
+                      class="calendar-add-field"
+                      for="edit-calendar-display"
+                      hidden
+                    >
+                      <span class="calendar-add-field-label">Display</span>
+                      <select id="edit-calendar-display" class="calendar-add-select">
+                        <option value="number">Number</option>
+                        <option value="heatmap">Heatmap</option>
+                        <option value="number-heatmap">Number + Heatmap</option>
+                      </select>
                     </label>
                     <div class="calendar-add-field" aria-label="Color">
                       <span class="calendar-add-field-label">Color</span>
