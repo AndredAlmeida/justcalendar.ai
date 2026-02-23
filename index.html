@@ -625,11 +625,12 @@
         position: fixed;
         left: 0;
         top: 0;
-        width: min(42rem, calc(100vw - 1.4rem));
+        width: fit-content;
+        max-width: min(42rem, calc(100vw - 1.4rem));
         max-height: min(42vh, 16rem);
         border-radius: 14px;
         border: 1px solid var(--line);
-        background: var(--panel);
+        background: color-mix(in srgb, var(--panel) 80%, transparent);
         box-shadow: var(--card-shadow);
         padding: 0.74rem 0.88rem;
         opacity: 0;
@@ -2278,7 +2279,8 @@
         }
 
         .notes-hover-preview {
-          width: calc(100vw - 1rem);
+          width: fit-content;
+          max-width: calc(100vw - 1rem);
           max-height: min(48vh, 14rem);
           border-radius: 11px;
           padding: 0.58rem 0.64rem;

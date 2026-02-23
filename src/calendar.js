@@ -586,11 +586,17 @@ export function initInfiniteCalendar(container) {
     if (!cell || !cell.isConnected || !container.contains(cell)) return;
 
     const cellRect = cell.getBoundingClientRect();
+    const header = document.querySelector("header");
+    const headerBottom = header ? Math.round(header.getBoundingClientRect().bottom) : 0;
     const previewRect = notesHoverPreview.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const previewWidth = previewRect.width;
     const previewHeight = previewRect.height;
+    const minTopBoundary = Math.max(
+      NOTES_HOVER_PREVIEW_VIEWPORT_PADDING_PX,
+      headerBottom + NOTES_HOVER_PREVIEW_GAP_PX,
+    );
 
     let nextLeft =
       cellRect.left + cellRect.width / 2 - previewWidth / 2;
@@ -602,13 +608,17 @@ export function initInfiniteCalendar(container) {
 
     const topAboveCell = cellRect.top - previewHeight - NOTES_HOVER_PREVIEW_GAP_PX;
     const topBelowCell = cellRect.bottom + NOTES_HOVER_PREVIEW_GAP_PX;
-    const hasSpaceAbove = topAboveCell >= NOTES_HOVER_PREVIEW_VIEWPORT_PADDING_PX;
+    const hasSpaceAbove = topAboveCell >= minTopBoundary;
 
     let nextTop = hasSpaceAbove ? topAboveCell : topBelowCell;
+    const maxTopBoundary = Math.max(
+      minTopBoundary,
+      viewportHeight - previewHeight - NOTES_HOVER_PREVIEW_VIEWPORT_PADDING_PX,
+    );
     nextTop = clamp(
       nextTop,
-      NOTES_HOVER_PREVIEW_VIEWPORT_PADDING_PX,
-      viewportHeight - previewHeight - NOTES_HOVER_PREVIEW_VIEWPORT_PADDING_PX,
+      minTopBoundary,
+      maxTopBoundary,
     );
 
     notesHoverPreview.style.left = `${Math.round(nextLeft)}px`;
