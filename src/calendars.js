@@ -322,6 +322,7 @@ function setCalendarButtonLabel(button, activeCalendar) {
     activeCalendar?.color,
     DEFAULT_CALENDAR_COLOR,
   );
+  button.style.setProperty("--active-calendar-color", nextDotColor);
 
   const existingDot = button.querySelector(".calendar-current-dot");
   const existingName = button.querySelector(".calendar-current-name");
