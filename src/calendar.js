@@ -11,6 +11,7 @@ const BOTTOM_THRESHOLD = 650;
 const FAST_SCROLL_DURATION_MS = 380;
 const SELECTED_ROW_HEIGHT_MULTIPLIER = 1.5;
 const MIN_OTHER_ROW_HEIGHT_RATIO = 0.06;
+const MIN_OTHER_ROW_HEIGHT_RATIO_SHORT_MONTH = 0.01;
 const DAY_DESELECT_FADE_MS = 1080;
 const ZOOM_OUT_DURATION_MS = 480;
 const ZOOM_OUT_RESET_FALLBACK_MS = ZOOM_OUT_DURATION_MS + 120;
@@ -19,7 +20,7 @@ const TABLE_UNEXPAND_RESET_FALLBACK_MS = TABLE_UNEXPAND_DURATION_MS + 80;
 
 export const MIN_SELECTION_EXPANSION = 1;
 export const MAX_SELECTION_EXPANSION = 3;
-export const DEFAULT_SELECTION_EXPANSION = 1.68;
+export const DEFAULT_SELECTION_EXPANSION = 2.6;
 export const MIN_CELL_EXPANSION_X = MIN_SELECTION_EXPANSION;
 export const MAX_CELL_EXPANSION_X = MAX_SELECTION_EXPANSION;
 export const DEFAULT_CELL_EXPANSION_X = DEFAULT_SELECTION_EXPANSION;
@@ -31,7 +32,7 @@ export const MAX_CELL_EXPANSION = MAX_CELL_EXPANSION_X;
 export const DEFAULT_CELL_EXPANSION = DEFAULT_CELL_EXPANSION_X;
 export const MIN_CAMERA_ZOOM = 1;
 export const MAX_CAMERA_ZOOM = 3;
-export const DEFAULT_CAMERA_ZOOM = 1.68;
+export const DEFAULT_CAMERA_ZOOM = 3;
 
 const CALENDAR_DAY_STATES_STORAGE_KEY = "justcal-calendar-day-states";
 const LEGACY_DAY_STATE_STORAGE_KEY = "justcal-day-states";
@@ -944,7 +945,11 @@ export function initInfiniteCalendar(container) {
 
     const requestedExpandedRowHeight =
       bodyHeight * ((cellExpansionY * SELECTED_ROW_HEIGHT_MULTIPLIER) / rowCount);
-    const minOtherRowHeight = bodyHeight * MIN_OTHER_ROW_HEIGHT_RATIO;
+    const minOtherRowHeightRatio =
+      rowCount <= 4
+        ? MIN_OTHER_ROW_HEIGHT_RATIO_SHORT_MONTH
+        : MIN_OTHER_ROW_HEIGHT_RATIO;
+    const minOtherRowHeight = bodyHeight * minOtherRowHeightRatio;
     const maxExpandedRowHeight = bodyHeight - minOtherRowHeight * (rowCount - 1);
     const expandedRowHeight = clamp(requestedExpandedRowHeight, 0, maxExpandedRowHeight);
     const otherRowHeight = (bodyHeight - expandedRowHeight) / (rowCount - 1);

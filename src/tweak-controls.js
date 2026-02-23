@@ -18,7 +18,7 @@ const LEGACY_CELL_EXPANSION_STORAGE_KEY = "justcal-cell-expansion";
 const LEGACY_SELECTION_EXPANSION_STORAGE_KEY = "justcal-selection-expansion";
 const MIN_FADE_DELTA = 0;
 const MAX_FADE_DELTA = 100;
-const DEFAULT_FADE_DELTA = 1;
+const DEFAULT_FADE_DELTA = 25;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
