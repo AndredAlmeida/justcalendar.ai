@@ -4,14 +4,63 @@ A single-page infinite scrolling calendar built with Vite and vanilla JavaScript
 
 ## Features
 
-- Infinite month scrolling in both directions.
-- Click-to-select day expansion animation (row and column expansion).
-- Per-day status markers: `X`, `Red`, `Yellow`, `Green`.
-- Persistent day states via browser `localStorage`.
-- Dark mode by default with a theme toggle.
-- Expand-controls panel for tuning day expansion strength.
-- Keyboard support: `Esc` clears the selected day.
-- Floating GitHub shortcut button (bottom-right).
+- Infinite month timeline with lazy loading in both directions.
+- Present-day focused startup with quick "Back to current month/day" floating action.
+- Day-cell selection flow with smooth pan+zoom, table row/column expansion, and animated deselection.
+- Today indicator styling and per-day hover/selection states.
+- Fast smooth scrolling helper used for navigation-to-target day.
+- Full keyboard `Esc` handling to close selected day and open popovers.
+
+- Multiple calendar types:
+- `Semaphore` (`signal-3`): 4-state day controls (`X`, `Red`, `Yellow`, `Green`) with compact hover controls and top-right state dot.
+- `Score`: per-day slider (`-1` to `10`) with themed styling, hover-only controls, and animated in-cell score badge.
+- `Check`: click-to-toggle checkmark day state.
+- `Notes`: per-day text notes with dedicated day editor, auto-focus on open, and note indicators.
+
+- Score display modes per calendar:
+- `Number`
+- `Heatmap`
+- `Number + Heatmap`
+- Heatmap mode shows numeric score on hover while keeping cell intensity rendering.
+
+- Notes UX:
+- In-day note editor fills the selected day area, no outline, non-resizable, smaller text.
+- Small inline note preview on cell hover.
+- Delayed larger note preview popup near hovered cell.
+
+- Calendar management:
+- Add unlimited calendars with Name, Type, and Color.
+- Score calendars support conditional `Display` property in Add/Edit forms.
+- Edit calendar name/color/display.
+- Delete calendar with typed-name confirmation.
+- Duplicate calendar names are blocked.
+- Calendar data is stored per calendar id.
+
+- Calendar pinning:
+- Toggle pin per calendar from the menu row.
+- Reorder behavior:
+- Pinning moves that calendar to top.
+- Unpinning moves it to first unpinned position.
+- Smooth list-reorder animation for pin/unpin.
+- Max 3 pinned calendars.
+- When pin cap is reached, unpinned calendars no longer show pin action.
+- Non-active pinned calendars are also shown in the header row before the top-right calendar button.
+
+- Themes and visuals:
+- Theme switcher with 5 themes: `Dark`, `Tokyo Night Storm` (default), `Solarized Dark`, `Solarized Light`, `Light`.
+- Themed score slider colors and theme-aware component styling.
+- Custom tooltip system and polished floating controls.
+
+- Developer controls panel:
+- Sliders for `Cell Zoom`, `Expand X`, `Expand Y`, and `Fade Delta`.
+- Values persist in `localStorage`.
+- Toggle with keyboard shortcut `P`.
+- Mobile debug toggle button included.
+
+- Misc:
+- Header calendar switcher with active calendar chip and calendar menu.
+- Pinned calendar chips rendered in header.
+- Floating GitHub shortcut button.
 
 ## Tech Stack
 
@@ -76,7 +125,12 @@ The app persists state in `localStorage` using:
 - `justcal-calendar-day-states`
 - `justcal-day-states` (legacy key read for migration)
 - `justcal-theme`
-- `justcal-selection-expansion`
+- `justcal-camera-zoom`
+- `justcal-cell-expansion-x`
+- `justcal-cell-expansion-y`
+- `justcal-fade-delta`
+- `justcal-cell-expansion` (legacy key read for migration)
+- `justcal-selection-expansion` (legacy key read for migration)
 
 ## Project Structure
 
@@ -86,6 +140,7 @@ The app persists state in `localStorage` using:
 ├── src/
 │   ├── main.js
 │   ├── calendar.js
+│   ├── calendars.js
 │   ├── theme.js
 │   └── tweak-controls.js
 ├── vite.config.js
