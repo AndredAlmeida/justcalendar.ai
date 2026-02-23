@@ -1,4 +1,6 @@
 const CALENDARS_STORAGE_KEY = "justcal-calendars";
+const CALENDAR_DAY_STATES_STORAGE_KEY = "justcal-calendar-day-states";
+const LEGACY_DAY_STATE_STORAGE_KEY = "justcal-day-states";
 const DEFAULT_CALENDAR_LABEL = "Energy Tracker";
 const DEFAULT_CALENDAR_ID = "energy-tracker";
 const DEFAULT_CALENDAR_COLOR = "blue";
@@ -24,6 +26,46 @@ const CALENDAR_COLOR_HEX_BY_KEY = Object.freeze({
   cyan: "#22d3ee",
   blue: "#3b82f6",
 });
+const FIRST_RUN_SEED_ACTIVE_CALENDAR_ID = "energy-tracker";
+const FIRST_RUN_SEED_CALENDARS = Object.freeze([
+  {
+    id: "sleep-score",
+    name: "Sleep Score",
+    type: CALENDAR_TYPE_SCORE,
+    color: "cyan",
+    pinned: true,
+    display: SCORE_DISPLAY_NUMBER_HEATMAP,
+  },
+  {
+    id: "took-pills",
+    name: "Took Pills",
+    type: CALENDAR_TYPE_CHECK,
+    color: "green",
+    pinned: true,
+  },
+  {
+    id: "energy-tracker",
+    name: "Energy Tracker",
+    type: CALENDAR_TYPE_SIGNAL,
+    color: "blue",
+    pinned: true,
+  },
+  {
+    id: "thoughts",
+    name: "Thoughts",
+    type: CALENDAR_TYPE_NOTES,
+    color: "orange",
+    pinned: true,
+  },
+  {
+    id: "workout-intensity",
+    name: "Workout Intensity",
+    type: CALENDAR_TYPE_SCORE,
+    color: "red",
+    pinned: false,
+    display: SCORE_DISPLAY_HEATMAP,
+  },
+]);
 
 function getDefaultCalendar() {
   return {
@@ -33,6 +75,78 @@ function getDefaultCalendar() {
     color: DEFAULT_CALENDAR_COLOR,
     pinned: false,
   };
+}
+
+function toFirstRunSeedDayKey(dayNumber) {
+  return `2026-02-${String(dayNumber).padStart(2, "0")}`;
+}
+
+function assignFirstRunSeedDayValues(dayEntries, dayNumbers, dayValue) {
+  dayNumbers.forEach((dayNumber) => {
+    dayEntries[toFirstRunSeedDayKey(dayNumber)] = dayValue;
+  });
+}
+
+function buildFirstRunSeedDayStates() {
+  const sleepScoreDayValues = {};
+  assignFirstRunSeedDayValues(sleepScoreDayValues, [10, 11, 12], 7);
+  assignFirstRunSeedDayValues(sleepScoreDayValues, [13, 14, 15, 16], 8);
+  assignFirstRunSeedDayValues(sleepScoreDayValues, [17], 4);
+  assignFirstRunSeedDayValues(sleepScoreDayValues, [18, 19, 20], 10);
+  assignFirstRunSeedDayValues(sleepScoreDayValues, [21, 22, 23], 3);
+
+  const tookPillsDayValues = {};
+  assignFirstRunSeedDayValues(tookPillsDayValues, [16, 17, 18, 19, 20, 21, 22], true);
+
+  const energyTrackerDayValues = {};
+  assignFirstRunSeedDayValues(energyTrackerDayValues, [10, 11, 12, 13], "yellow");
+  assignFirstRunSeedDayValues(energyTrackerDayValues, [14, 15, 16, 17, 18], "green");
+  assignFirstRunSeedDayValues(energyTrackerDayValues, [19, 20], "red");
+  assignFirstRunSeedDayValues(energyTrackerDayValues, [21, 22, 23], "green");
+
+  const thoughtsDayValues = {
+    [toFirstRunSeedDayKey(20)]: "Test Thought 1",
+    [toFirstRunSeedDayKey(21)]: "Yet another note",
+    [toFirstRunSeedDayKey(22)]:
+      "Super long long long long long long long long long long long long note.",
+  };
+
+  const workoutIntensityDayValues = {};
+  assignFirstRunSeedDayValues(workoutIntensityDayValues, [4, 5, 7, 15], 7);
+  assignFirstRunSeedDayValues(workoutIntensityDayValues, [1, 2, 8, 17], 5);
+  assignFirstRunSeedDayValues(workoutIntensityDayValues, [3, 11, 16, 20], 10);
+
+  return {
+    "sleep-score": sleepScoreDayValues,
+    "took-pills": tookPillsDayValues,
+    "energy-tracker": energyTrackerDayValues,
+    thoughts: thoughtsDayValues,
+    "workout-intensity": workoutIntensityDayValues,
+  };
+}
+
+function seedFirstRunStorageIfEmpty() {
+  try {
+    if (localStorage.length !== 0) {
+      return;
+    }
+
+    localStorage.setItem(
+      CALENDARS_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        activeCalendarId: FIRST_RUN_SEED_ACTIVE_CALENDAR_ID,
+        calendars: FIRST_RUN_SEED_CALENDARS.map((calendar) => ({ ...calendar })),
+      }),
+    );
+    localStorage.setItem(
+      CALENDAR_DAY_STATES_STORAGE_KEY,
+      JSON.stringify(buildFirstRunSeedDayStates()),
+    );
+    localStorage.removeItem(LEGACY_DAY_STATE_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors and keep behavior in-memory.
+  }
 }
 
 function isObjectLike(value) {
@@ -175,6 +289,8 @@ function loadCalendarsState() {
     activeCalendarId: fallbackCalendar.id,
     calendars: [fallbackCalendar],
   };
+
+  seedFirstRunStorageIfEmpty();
 
   try {
     const rawStoredValue = localStorage.getItem(CALENDARS_STORAGE_KEY);
