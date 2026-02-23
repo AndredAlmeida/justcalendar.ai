@@ -1973,13 +1973,120 @@
         display: inline-flex;
         align-items: center;
         gap: 0.34rem;
+        pointer-events: none;
+        min-width: 0;
       }
 
-      .calendar-add-type-icon {
-        width: 2.0em;
-        height: 2.0em;
-        flex: 0 0 2.0em;
-        display: block;
+      .calendar-add-type-shell {
+        position: relative;
+      }
+
+      .calendar-add-type-native-select {
+        position: absolute;
+        width: 0;
+        height: 0;
+        opacity: 0;
+        pointer-events: none;
+        inset: 0;
+      }
+
+      .calendar-add-type-trigger {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-right: 1.72rem;
+        position: relative;
+      }
+
+      .calendar-add-type-trigger::after {
+        content: "";
+        position: absolute;
+        right: 0.64rem;
+        top: 50%;
+        width: 0.42rem;
+        height: 0.42rem;
+        border-right: 2px solid currentColor;
+        border-bottom: 2px solid currentColor;
+        opacity: 0.72;
+        transform: translateY(calc(-0.06rem - 1px)) rotate(45deg);
+        transition:
+          transform 0.16s ease,
+          opacity 0.16s ease;
+      }
+
+      .calendar-add-type-trigger.is-expanded::after {
+        transform: translateY(calc(-0.06rem + 1px)) rotate(-135deg);
+        opacity: 0.84;
+      }
+
+      .calendar-add-type-label {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--ink);
+      }
+
+      .calendar-add-type-menu {
+        position: absolute;
+        top: calc(100% + 0.34rem);
+        left: 0;
+        right: 0;
+        display: grid;
+        gap: 0.22rem;
+        padding: 0.32rem;
+        border-radius: 14px;
+        border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
+        background: color-mix(in srgb, var(--panel) 96%, #ffffff 4%);
+        box-shadow:
+          0 10px 18px color-mix(in srgb, #0f172a 18%, transparent),
+          inset 0 1px 0 color-mix(in srgb, #ffffff 14%, transparent);
+        z-index: 10;
+      }
+
+      .calendar-add-type-menu[hidden] {
+        display: none;
+      }
+
+      .calendar-add-type-option {
+        border: 0;
+        width: 100%;
+        min-height: 1.88rem;
+        border-radius: 10px;
+        padding: 0 0.5rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.36rem;
+        background: transparent;
+        color: var(--ink);
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .calendar-add-type-option:hover {
+        background: color-mix(in srgb, var(--muted) 78%, transparent);
+      }
+
+      .calendar-add-type-option.is-selected {
+        background: color-mix(in srgb, var(--muted) 84%, transparent);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 56%, transparent);
+      }
+
+      .calendar-add-type-option:focus-visible {
+        outline: 2px solid #3b82f6;
+        outline-offset: 2px;
+      }
+
+      .calendar-add-type-option-label {
+        font-size: 0.66rem;
+        font-weight: 650;
+        line-height: 1;
+      }
+
+      .calendar-add-type-display .calendar-option-type-icon {
+        width: calc(0.82rem + 6px);
+        height: calc(0.82rem + 6px);
+        flex: 0 0 calc(0.82rem + 6px);
       }
 
       .calendar-add-color-options {
@@ -2873,14 +2980,109 @@
                       autocomplete="off"
                     />
                   </label>
-                  <label class="calendar-add-field" for="new-calendar-type">
+                  <label class="calendar-add-field" for="new-calendar-type-trigger">
                     <span class="calendar-add-field-label">Type</span>
-                    <select id="new-calendar-type" class="calendar-add-select">
-                      <option value="signal-3">Semaphore</option>
-                      <option value="score">Score</option>
-                      <option value="check">Check</option>
-                      <option value="notes">Notes</option>
-                    </select>
+                    <div class="calendar-add-type-shell">
+                      <select
+                        id="new-calendar-type"
+                        class="calendar-add-select calendar-add-type-native-select"
+                        tabindex="-1"
+                        aria-hidden="true"
+                      >
+                        <option value="signal-3">Semaphore</option>
+                        <option value="score">Score</option>
+                        <option value="check">Check</option>
+                        <option value="notes">Notes</option>
+                      </select>
+                      <button
+                        id="new-calendar-type-trigger"
+                        type="button"
+                        class="calendar-add-select calendar-add-type-trigger"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-controls="new-calendar-type-menu"
+                      >
+                        <span
+                          id="new-calendar-type-display"
+                          class="calendar-add-type-display"
+                          aria-hidden="true"
+                        >
+                          <span
+                            id="new-calendar-type-icon"
+                            class="calendar-option-type-icon is-signal"
+                            style="--calendar-type-icon-color: #22c55e"
+                            aria-hidden="true"
+                          ></span>
+                          <span id="new-calendar-type-label" class="calendar-add-type-label">
+                            Semaphore
+                          </span>
+                        </span>
+                      </button>
+                      <div
+                        id="new-calendar-type-menu"
+                        class="calendar-add-type-menu"
+                        role="listbox"
+                        aria-label="Calendar type"
+                        hidden
+                      >
+                        <button
+                          type="button"
+                          class="calendar-add-type-option is-selected"
+                          data-value="signal-3"
+                          role="option"
+                          aria-selected="true"
+                        >
+                          <span
+                            class="calendar-option-type-icon is-signal"
+                            style="--calendar-type-icon-color: #22c55e"
+                            aria-hidden="true"
+                          ></span>
+                          <span class="calendar-add-type-option-label">Semaphore</span>
+                        </button>
+                        <button
+                          type="button"
+                          class="calendar-add-type-option"
+                          data-value="score"
+                          role="option"
+                          aria-selected="false"
+                        >
+                          <span
+                            class="calendar-option-type-icon is-score"
+                            style="--calendar-type-icon-color: #22c55e"
+                            aria-hidden="true"
+                          ></span>
+                          <span class="calendar-add-type-option-label">Score</span>
+                        </button>
+                        <button
+                          type="button"
+                          class="calendar-add-type-option"
+                          data-value="check"
+                          role="option"
+                          aria-selected="false"
+                        >
+                          <span
+                            class="calendar-option-type-icon is-check"
+                            style="--calendar-type-icon-color: #22c55e"
+                            aria-hidden="true"
+                          ></span>
+                          <span class="calendar-add-type-option-label">Check</span>
+                        </button>
+                        <button
+                          type="button"
+                          class="calendar-add-type-option"
+                          data-value="notes"
+                          role="option"
+                          aria-selected="false"
+                        >
+                          <span
+                            class="calendar-option-type-icon is-notes"
+                            style="--calendar-type-icon-color: #22c55e"
+                            aria-hidden="true"
+                          ></span>
+                          <span class="calendar-add-type-option-label">Notes</span>
+                        </button>
+                      </div>
+                    </div>
                   </label>
                   <label
                     id="new-calendar-display-field"

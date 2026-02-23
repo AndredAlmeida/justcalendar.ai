@@ -492,6 +492,14 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
   const addCancelButton = document.getElementById("calendar-add-cancel");
   const addNameInput = document.getElementById("new-calendar-name");
   const addTypeSelect = document.getElementById("new-calendar-type");
+  const addTypeTrigger = document.getElementById("new-calendar-type-trigger");
+  const addTypeMenu = document.getElementById("new-calendar-type-menu");
+  const addTypeDisplay = document.getElementById("new-calendar-type-display");
+  const addTypeDisplayLabel = document.getElementById("new-calendar-type-label");
+  const addTypeDisplayIcon = document.getElementById("new-calendar-type-icon");
+  const addTypeOptionButtons = addTypeMenu
+    ? [...addTypeMenu.querySelectorAll(".calendar-add-type-option[data-value]")]
+    : [];
   const addDisplayField = document.getElementById("new-calendar-display-field");
   const addDisplaySelect = document.getElementById("new-calendar-display");
   const addColorOptions = document.getElementById("new-calendar-color");
@@ -542,6 +550,60 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
     flashMissingInput(editNameInput);
   };
 
+  const addTypeLabelByValue = Object.freeze({
+    [CALENDAR_TYPE_SIGNAL]: "Semaphore",
+    [CALENDAR_TYPE_SCORE]: "Score",
+    [CALENDAR_TYPE_CHECK]: "Check",
+    [CALENDAR_TYPE_NOTES]: "Notes",
+  });
+
+  const resolveAddEditorSelectedColorHex = () => {
+    const selectedAddColorButton = addColorButtons.find((candidateButton) => {
+      return candidateButton.classList.contains("is-active");
+    });
+    const selectedAddColor = normalizeCalendarColor(
+      selectedAddColorButton?.dataset.color,
+      DEFAULT_NEW_CALENDAR_COLOR,
+    );
+    return resolveCalendarColorHex(selectedAddColor, DEFAULT_CALENDAR_COLOR);
+  };
+
+  const setAddTypeMenuExpanded = (isExpanded) => {
+    if (!addTypeTrigger || !addTypeMenu || !addShell) return;
+    const shouldExpand = Boolean(isExpanded) && addShell.classList.contains("is-editing");
+    addTypeMenu.hidden = !shouldExpand;
+    addTypeTrigger.classList.toggle("is-expanded", shouldExpand);
+    addTypeTrigger.setAttribute("aria-expanded", String(shouldExpand));
+  };
+
+  const syncAddTypeDisplay = () => {
+    if (!addTypeSelect || !addTypeDisplay || !addTypeDisplayLabel || !addTypeDisplayIcon) {
+      return;
+    }
+    const normalizedCalendarType = normalizeCalendarType(addTypeSelect.value);
+    const selectedOption = addTypeSelect.options[addTypeSelect.selectedIndex];
+    const selectedLabel =
+      selectedOption?.textContent?.trim() ||
+      addTypeLabelByValue[normalizedCalendarType] ||
+      addTypeLabelByValue[DEFAULT_CALENDAR_TYPE];
+
+    addTypeDisplayLabel.textContent = selectedLabel;
+    applyCalendarTypeIconVariant(addTypeDisplayIcon, normalizedCalendarType);
+    const selectedColorHex = resolveAddEditorSelectedColorHex();
+    addTypeDisplayIcon.style.setProperty("--calendar-type-icon-color", selectedColorHex);
+
+    addTypeOptionButtons.forEach((optionButton) => {
+      const normalizedOptionType = normalizeCalendarType(optionButton.dataset.value);
+      const isSelected = normalizedOptionType === normalizedCalendarType;
+      optionButton.classList.toggle("is-selected", isSelected);
+      optionButton.setAttribute("aria-selected", String(isSelected));
+      const optionIcon = optionButton.querySelector(".calendar-option-type-icon");
+      if (!optionIcon) return;
+      applyCalendarTypeIconVariant(optionIcon, normalizedOptionType);
+      optionIcon.style.setProperty("--calendar-type-icon-color", selectedColorHex);
+    });
+  };
+
   const setActiveColor = (nextButton) => {
     if (!nextButton) return;
     addColorButtons.forEach((candidateButton) => {
@@ -549,6 +611,7 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
       candidateButton.classList.toggle("is-active", isActive);
       candidateButton.setAttribute("aria-pressed", String(isActive));
     });
+    syncAddTypeDisplay();
   };
 
   const defaultColorButton =
@@ -1080,7 +1143,9 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
       addDisplaySelect,
       isExpanded: false,
     });
+    setAddTypeMenuExpanded(false);
     resetAddColor();
+    syncAddTypeDisplay();
   };
 
   const resetEditEditor = () => {
@@ -1278,6 +1343,71 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
       addDisplayField,
       addDisplaySelect,
       isExpanded: addShell?.classList.contains("is-editing") === true,
+    });
+    setAddTypeMenuExpanded(false);
+    syncAddTypeDisplay();
+  });
+
+  addTypeTrigger?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const isExpanded = addTypeMenu?.hidden === false;
+    setAddTypeMenuExpanded(!isExpanded);
+  });
+
+  addTypeTrigger?.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      setAddTypeMenuExpanded(true);
+      const selectedOption =
+        addTypeOptionButtons.find((optionButton) => {
+          return optionButton.classList.contains("is-selected");
+        }) || addTypeOptionButtons[0];
+      selectedOption?.focus();
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setAddTypeMenuExpanded(false);
+    }
+  });
+
+  addTypeMenu?.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setAddTypeMenuExpanded(false);
+      addTypeTrigger?.focus();
+      return;
+    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+      return;
+    }
+    const targetOption = event.target.closest(".calendar-add-type-option");
+    if (!targetOption) {
+      return;
+    }
+    const currentIndex = addTypeOptionButtons.indexOf(targetOption);
+    if (currentIndex < 0) {
+      return;
+    }
+    event.preventDefault();
+    const direction = event.key === "ArrowDown" ? 1 : -1;
+    const nextIndex = (currentIndex + direction + addTypeOptionButtons.length) %
+      addTypeOptionButtons.length;
+    addTypeOptionButtons[nextIndex]?.focus();
+  });
+
+  addTypeOptionButtons.forEach((optionButton) => {
+    optionButton.addEventListener("click", () => {
+      const nextCalendarType = normalizeCalendarType(optionButton.dataset.value);
+      if (addTypeSelect) {
+        addTypeSelect.value = nextCalendarType;
+        addTypeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      } else {
+        syncAddTypeDisplay();
+      }
+      setAddTypeMenuExpanded(false);
+      addTypeTrigger?.focus();
     });
   });
 
@@ -1538,10 +1668,19 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
   });
 
   document.addEventListener("click", (event) => {
+    const clickedElement = event.target instanceof Element ? event.target : null;
+    if (
+      addTypeMenu &&
+      !addTypeMenu.hidden &&
+      (!clickedElement || !clickedElement.closest(".calendar-add-type-shell"))
+    ) {
+      setAddTypeMenuExpanded(false);
+    }
+
     if (!switcher.classList.contains("is-expanded")) {
       return;
     }
-    if (switcher.contains(event.target)) {
+    if (clickedElement && switcher.contains(clickedElement)) {
       return;
     }
     resetAddEditor();
