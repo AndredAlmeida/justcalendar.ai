@@ -179,7 +179,44 @@
         display: flex;
         align-items: center;
         justify-content: flex-end;
+        gap: 0.42rem;
         min-width: 2.1rem;
+      }
+
+      #header-pinned-calendars {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.34rem;
+        min-width: 0;
+      }
+
+      #header-pinned-calendars:empty {
+        display: none;
+      }
+
+      .header-pinned-calendar {
+        height: 2.02rem;
+        min-width: 0;
+        border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+        border-radius: 999px;
+        padding: 0 0.66rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.42rem;
+        color: var(--ink);
+        font-size: 0.7rem;
+        font-weight: 650;
+        letter-spacing: 0.01em;
+        background: color-mix(in srgb, var(--panel) 95%, #ffffff 5%);
+        box-shadow: 0 1px 5px rgba(15, 23, 42, 0.09);
+        pointer-events: none;
+      }
+
+      .header-pinned-calendar .calendar-current-name {
+        max-width: 8.25rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       #header-calendars-btn {
@@ -2459,6 +2496,21 @@
           font-size: 0.69rem;
         }
 
+        #calendar-switcher {
+          gap: 0.3rem;
+        }
+
+        .header-pinned-calendar {
+          height: 1.84rem;
+          padding: 0 0.54rem;
+          gap: 0.34rem;
+          font-size: 0.64rem;
+        }
+
+        .header-pinned-calendar .calendar-current-name {
+          max-width: 5.5rem;
+        }
+
         .month-card {
           border-radius: 10px;
           padding: 0.55rem;
@@ -2664,6 +2716,7 @@
       <header>
         <img class="brand-logo" src="/logo-top.png" alt="Just Calendar" />
         <div id="calendar-switcher">
+          <div id="header-pinned-calendars" aria-hidden="true"></div>
           <div id="calendar-options" aria-label="Calendar options">
             <p class="calendar-options-title">Calendars</p>
             <div class="calendar-options-divider" aria-hidden="true"></div>

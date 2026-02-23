@@ -292,6 +292,27 @@ function createCalendarOptionElement(calendar, isActive, { showPinToggle = true 
   return optionButton;
 }
 
+function createHeaderPinnedCalendarElement(calendar) {
+  const chip = document.createElement("span");
+  chip.className = "header-pinned-calendar";
+  chip.setAttribute("aria-hidden", "true");
+
+  const dot = document.createElement("span");
+  dot.className = "calendar-current-dot";
+  dot.setAttribute("aria-hidden", "true");
+  dot.style.setProperty(
+    "--calendar-dot-color",
+    resolveCalendarColorHex(calendar.color, DEFAULT_CALENDAR_COLOR),
+  );
+
+  const name = document.createElement("span");
+  name.className = "calendar-current-name";
+  name.textContent = sanitizeCalendarName(calendar.name) || DEFAULT_CALENDAR_LABEL;
+
+  chip.append(dot, name);
+  return chip;
+}
+
 function setCalendarButtonLabel(button, activeCalendar) {
   if (!button) return;
 
@@ -422,6 +443,7 @@ function setEditCalendarEditorExpanded({
 
 export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
   const switcher = document.getElementById("calendar-switcher");
+  const headerPinnedCalendars = document.getElementById("header-pinned-calendars");
   const calendarList = document.getElementById("calendar-list");
   const addShell = document.getElementById("calendar-add-shell");
   const addTrigger = document.getElementById("calendar-add-trigger");
@@ -729,6 +751,21 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
     animateCalendarListReorder(previousRectsById);
   };
 
+  const renderHeaderPinnedCalendars = () => {
+    if (!headerPinnedCalendars) {
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    calendars.forEach((calendar) => {
+      if (!normalizeCalendarPinned(calendar.pinned) || calendar.id === activeCalendarId) {
+        return;
+      }
+      fragment.appendChild(createHeaderPinnedCalendarElement(calendar));
+    });
+    headerPinnedCalendars.replaceChildren(fragment);
+  };
+
   const syncSwitcherButton = () => {
     const activeCalendar = resolveActiveCalendar();
     setCalendarSwitcherExpanded({
@@ -755,6 +792,7 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
 
   const syncCalendarUi = () => {
     renderCalendarList();
+    renderHeaderPinnedCalendars();
     syncSwitcherButton();
     syncDeleteButtonState();
   };
