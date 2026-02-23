@@ -243,7 +243,7 @@ function createCalendarTypeIconElement(calendarType) {
 
   if (normalizedCalendarType === CALENDAR_TYPE_SCORE) {
     typeIcon.classList.add("is-score");
-    typeIcon.textContent = "S";
+    typeIcon.textContent = "";
   } else if (normalizedCalendarType === CALENDAR_TYPE_CHECK) {
     typeIcon.classList.add("is-check");
     typeIcon.textContent = "";

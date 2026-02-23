@@ -1559,53 +1559,65 @@
       }
 
       .calendar-option-type-icon {
-        width: 0.8rem;
-        height: 0.8rem;
-        border-radius: 999px;
-        flex: 0 0 0.8rem;
-        background: linear-gradient(
-          180deg,
-          #22c55e 0%,
-          #22c55e 33.333%,
-          #facc15 33.333%,
-          #facc15 66.666%,
-          #ef4444 66.666%,
-          #ef4444 100%
-        );
+        width: 0.96rem;
+        height: 0.96rem;
+        flex: 0 0 0.96rem;
+        border-radius: 0.24rem;
+        background: color-mix(in srgb, var(--muted) 92%, #94a3b8 8%);
+        border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
       }
 
       .calendar-option-type-icon.is-score {
         display: inline-grid;
         place-items: center;
-        background: color-mix(in srgb, var(--muted) 84%, #f59e0b 16%);
-        border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
-        color: color-mix(in srgb, var(--ink) 86%, #ffffff 14%);
-        font-size: 0.55rem;
-        font-weight: 800;
-        line-height: 1;
+        width: 0.96rem;
+        height: 0.96rem;
+        flex: 0 0 0.96rem;
+        border-radius: 0.24rem;
+        background: color-mix(in srgb, var(--muted) 92%, #94a3b8 8%);
+        border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+        color: color-mix(in srgb, var(--ink) 74%, #ffffff 26%);
+      }
+
+      .calendar-option-type-icon.is-score::before {
+        content: "";
+        width: 0.76rem;
+        height: 0.76rem;
+        background-color: currentColor;
+        -webkit-mask: url("/score-calendar-icon.svg") center / contain no-repeat;
+        mask: url("/score-calendar-icon.svg") center / contain no-repeat;
       }
 
       .calendar-option-type-icon.is-check {
         display: inline-grid;
         place-items: center;
-        background: color-mix(in srgb, var(--muted) 82%, #22c55e 18%);
-        border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
-        color: color-mix(in srgb, #22c55e 74%, #ffffff 26%);
-        font-size: 0.63rem;
+        width: 0.96rem;
+        height: 0.96rem;
+        flex: 0 0 0.96rem;
+        border-radius: 0.24rem;
+        background: color-mix(in srgb, var(--muted) 92%, #94a3b8 8%);
+        border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+        color: color-mix(in srgb, var(--ink) 74%, #ffffff 26%);
+        font-size: 0.7rem;
         font-weight: 850;
         line-height: 1;
       }
 
       .calendar-option-type-icon.is-check::before {
         content: "\2713";
+        transform: translateX(-1px);
       }
 
       .calendar-option-type-icon.is-notes {
         display: inline-grid;
         place-items: center;
-        background: color-mix(in srgb, var(--muted) 82%, #3b82f6 18%);
-        border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
-        color: color-mix(in srgb, #3b82f6 74%, #ffffff 26%);
+        width: 0.96rem;
+        height: 0.96rem;
+        flex: 0 0 0.96rem;
+        border-radius: 0.24rem;
+        background: color-mix(in srgb, var(--muted) 92%, #94a3b8 8%);
+        border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+        color: color-mix(in srgb, var(--ink) 74%, #ffffff 26%);
         font-size: 0.63rem;
         font-weight: 850;
         line-height: 1;

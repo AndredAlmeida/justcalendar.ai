@@ -1,0 +1,17 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="128"
+  height="128"
+  viewBox="0 0 96 96"
+  fill="none"
+  role="img"
+  aria-label="Score calendar icon"
+>
+  <g fill="none" stroke="#2f3136" stroke-width="12" stroke-linecap="round">
+    <path d="M13 67A35 35 0 0 1 63.8 35.7" />
+    <path d="M78.8 49A35 35 0 0 1 83 65.8" />
+  </g>
+
+  <path d="M52.16 73.24 79.2 34.2 42.84 64.76Z" fill="#2f3136" />
+  <circle cx="47.5" cy="69" r="6.3" fill="#2f3136" />
+</svg>
