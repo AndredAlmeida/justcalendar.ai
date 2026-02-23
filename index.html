@@ -314,6 +314,13 @@
         background: var(--calendar-dot-color, #3b82f6);
       }
 
+      .calendar-current-type-icon.calendar-option-type-icon {
+        width: 0.82rem;
+        height: 0.82rem;
+        flex: 0 0 0.82rem;
+        border-radius: 0.2rem;
+      }
+
       .calendar-current-name {
         line-height: 1;
         white-space: nowrap;
@@ -1559,18 +1566,25 @@
       }
 
       .calendar-option-type-icon {
+        --calendar-type-icon-color: #3b82f6;
+        display: inline-grid;
+        place-items: center;
         width: 0.96rem;
         height: 0.96rem;
         flex: 0 0 0.96rem;
         border-radius: 0.24rem;
-        background: color-mix(in srgb, var(--muted) 92%, #94a3b8 8%);
-        border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+        background: color-mix(
+          in srgb,
+          var(--muted) 74%,
+          var(--calendar-type-icon-color) 26%
+        );
+        border: 1px solid
+          color-mix(in srgb, var(--line) 58%, var(--calendar-type-icon-color) 42%);
+        color: color-mix(in srgb, var(--calendar-type-icon-color) 78%, #ffffff 22%);
       }
 
       .calendar-option-type-icon.is-signal {
-        display: inline-grid;
-        place-items: center;
-        color: color-mix(in srgb, var(--ink) 74%, #ffffff 26%);
+        color: color-mix(in srgb, var(--calendar-type-icon-color) 82%, #ffffff 18%);
       }
 
       .calendar-option-type-icon.is-signal::before {
@@ -1585,15 +1599,7 @@
       }
 
       .calendar-option-type-icon.is-score {
-        display: inline-grid;
-        place-items: center;
-        width: 0.96rem;
-        height: 0.96rem;
-        flex: 0 0 0.96rem;
-        border-radius: 0.24rem;
-        background: color-mix(in srgb, var(--muted) 92%, #94a3b8 8%);
-        border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
-        color: color-mix(in srgb, var(--ink) 74%, #ffffff 26%);
+        color: color-mix(in srgb, var(--calendar-type-icon-color) 84%, #ffffff 16%);
       }
 
       .calendar-option-type-icon.is-score::before {
@@ -1604,15 +1610,7 @@
       }
 
       .calendar-option-type-icon.is-check {
-        display: inline-grid;
-        place-items: center;
-        width: 0.96rem;
-        height: 0.96rem;
-        flex: 0 0 0.96rem;
-        border-radius: 0.24rem;
-        background: color-mix(in srgb, var(--muted) 92%, #94a3b8 8%);
-        border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
-        color: color-mix(in srgb, var(--ink) 74%, #ffffff 26%);
+        color: color-mix(in srgb, var(--calendar-type-icon-color) 84%, #ffffff 16%);
         font-size: 0.7rem;
         font-weight: 850;
         line-height: 1;
@@ -1624,15 +1622,7 @@
       }
 
       .calendar-option-type-icon.is-notes {
-        display: inline-grid;
-        place-items: center;
-        width: 0.96rem;
-        height: 0.96rem;
-        flex: 0 0 0.96rem;
-        border-radius: 0.24rem;
-        background: color-mix(in srgb, var(--muted) 92%, #94a3b8 8%);
-        border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
-        color: color-mix(in srgb, var(--ink) 74%, #ffffff 26%);
+        color: color-mix(in srgb, var(--calendar-type-icon-color) 84%, #ffffff 16%);
         font-size: 0.63rem;
         font-weight: 850;
         line-height: 1;
@@ -3214,7 +3204,11 @@
               aria-label="Energy Tracker"
               aria-expanded="false"
             >
-              <span class="calendar-current-dot" aria-hidden="true"></span>
+              <span
+                class="calendar-option-type-icon calendar-current-type-icon is-signal"
+                aria-hidden="true"
+                style="--calendar-type-icon-color: #3b82f6"
+              ></span>
               <span class="calendar-current-name">Energy Tracker</span>
             </button>
           </span>

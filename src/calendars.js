@@ -235,26 +235,44 @@ function saveCalendarsState({ calendars, activeCalendarId }) {
   }
 }
 
-function createCalendarTypeIconElement(calendarType) {
+const CALENDAR_TYPE_ICON_VARIANT_CLASSES = Object.freeze([
+  "is-signal",
+  "is-score",
+  "is-check",
+  "is-notes",
+]);
+
+function applyCalendarTypeIconVariant(typeIcon, calendarType) {
+  if (!typeIcon) return;
   const normalizedCalendarType = normalizeCalendarType(calendarType);
-  const typeIcon = document.createElement("span");
-  typeIcon.className = "calendar-option-type-icon";
-  typeIcon.setAttribute("aria-hidden", "true");
+  typeIcon.classList.remove(...CALENDAR_TYPE_ICON_VARIANT_CLASSES);
+  typeIcon.textContent = "";
 
   if (normalizedCalendarType === CALENDAR_TYPE_SCORE) {
     typeIcon.classList.add("is-score");
-    typeIcon.textContent = "";
   } else if (normalizedCalendarType === CALENDAR_TYPE_CHECK) {
     typeIcon.classList.add("is-check");
-    typeIcon.textContent = "";
   } else if (normalizedCalendarType === CALENDAR_TYPE_NOTES) {
     typeIcon.classList.add("is-notes");
-    typeIcon.textContent = "";
   } else {
     typeIcon.classList.add("is-signal");
-    typeIcon.textContent = "";
   }
+}
 
+function createCalendarTypeIconElement(calendarType) {
+  const typeIcon = document.createElement("span");
+  typeIcon.className = "calendar-option-type-icon";
+  typeIcon.setAttribute("aria-hidden", "true");
+  applyCalendarTypeIconVariant(typeIcon, calendarType);
+  return typeIcon;
+}
+
+function createHeaderCalendarTypeIconElement(calendarType, iconColor) {
+  const typeIcon = createCalendarTypeIconElement(calendarType);
+  typeIcon.classList.add("calendar-current-type-icon");
+  if (iconColor) {
+    typeIcon.style.setProperty("--calendar-type-icon-color", iconColor);
+  }
   return typeIcon;
 }
 
@@ -274,25 +292,17 @@ function createCalendarOptionElement(calendar, isActive, { showPinToggle = true 
   const left = document.createElement("span");
   left.className = "calendar-option-left";
 
-  const dot = document.createElement("span");
-  dot.className = "calendar-option-dot";
-  dot.setAttribute("aria-hidden", "true");
-  dot.style.setProperty("--calendar-dot-color", resolveCalendarColorHex(calendar.color));
-
   const label = document.createElement("span");
   label.className = "calendar-option-label";
   label.textContent = calendar.name;
 
-  const nameWrap = document.createElement("span");
-  nameWrap.className = "calendar-option-name-wrap";
-  nameWrap.append(label);
-
   const typeIcon = createCalendarTypeIconElement(calendar.type);
-  if (typeIcon) {
-    nameWrap.append(typeIcon);
-  }
+  typeIcon.style.setProperty(
+    "--calendar-type-icon-color",
+    resolveCalendarColorHex(calendar.color, DEFAULT_CALENDAR_COLOR),
+  );
 
-  left.append(dot, nameWrap);
+  left.append(typeIcon, label);
   optionButton.append(left);
   if (showPinToggle) {
     const pinToggle = document.createElement("span");
@@ -318,13 +328,8 @@ function createHeaderPinnedCalendarElement(calendar) {
     resolveCalendarColorHex(calendar.color, DEFAULT_CALENDAR_COLOR),
   );
 
-  const dot = document.createElement("span");
-  dot.className = "calendar-current-dot";
-  dot.setAttribute("aria-hidden", "true");
-  dot.style.setProperty(
-    "--calendar-dot-color",
-    resolveCalendarColorHex(calendar.color, DEFAULT_CALENDAR_COLOR),
-  );
+  const iconColor = resolveCalendarColorHex(calendar.color, DEFAULT_CALENDAR_COLOR);
+  const typeIcon = createHeaderCalendarTypeIconElement(calendar.type, iconColor);
 
   const name = document.createElement("span");
   name.className = "calendar-current-name";
@@ -332,7 +337,7 @@ function createHeaderPinnedCalendarElement(calendar) {
   name.textContent = safeName;
   chip.setAttribute("aria-label", `Select calendar ${safeName}`);
 
-  chip.append(dot, name);
+  chip.append(typeIcon, name);
   return chip;
 }
 
@@ -345,27 +350,28 @@ function setCalendarButtonLabel(button, activeCalendar) {
     activeCalendar?.color,
     DEFAULT_CALENDAR_COLOR,
   );
+  const nextType = normalizeCalendarType(activeCalendar?.type, DEFAULT_CALENDAR_TYPE);
   button.style.setProperty("--active-calendar-color", nextDotColor);
 
-  const existingDot = button.querySelector(".calendar-current-dot");
+  const existingTypeIcon = button.querySelector(
+    ".calendar-current-type-icon.calendar-option-type-icon",
+  );
   const existingName = button.querySelector(".calendar-current-name");
-  if (existingDot && existingName) {
+  if (existingTypeIcon && existingName) {
     existingName.textContent = nextLabel;
-    existingDot.style.setProperty("--calendar-dot-color", nextDotColor);
+    existingTypeIcon.style.setProperty("--calendar-type-icon-color", nextDotColor);
+    applyCalendarTypeIconVariant(existingTypeIcon, nextType);
     return;
   }
 
   button.textContent = "";
-  const dot = document.createElement("span");
-  dot.className = "calendar-current-dot";
-  dot.setAttribute("aria-hidden", "true");
-  dot.style.setProperty("--calendar-dot-color", nextDotColor);
+  const typeIcon = createHeaderCalendarTypeIconElement(nextType, nextDotColor);
 
   const name = document.createElement("span");
   name.className = "calendar-current-name";
   name.textContent = nextLabel;
 
-  button.append(dot, name);
+  button.append(typeIcon, name);
 }
 
 function setCalendarSwitcherExpanded({ switcher, button, activeCalendar, isExpanded }) {
