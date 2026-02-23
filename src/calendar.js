@@ -1614,7 +1614,10 @@ export function initInfiniteCalendar(container) {
       toggleDayCheckForCell(dayCell);
       return;
     }
-    if (activeCalendarType === CALENDAR_TYPE_SIGNAL) {
+    if (
+      activeCalendarType === CALENDAR_TYPE_SIGNAL ||
+      activeCalendarType === CALENDAR_TYPE_SCORE
+    ) {
       return;
     }
     selectDayCell(dayCell);

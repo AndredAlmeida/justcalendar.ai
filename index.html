@@ -823,9 +823,29 @@
         display: none;
       }
 
-      #calendar-scroll[data-calendar-type="score"] td.day-cell.selected-day .day-score-row {
+      #calendar-scroll[data-calendar-type="score"] td.day-cell .day-score-row {
+        left: 0.34rem;
+        right: 0.34rem;
+        bottom: calc(0.34rem + 3px);
+        top: auto;
+        width: auto;
+        transform: none;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+      }
+
+      #calendar-scroll[data-calendar-type="score"] td.day-cell:hover .day-score-row,
+      #calendar-scroll[data-calendar-type="score"] td.day-cell:focus-within .day-score-row {
         opacity: 1;
         pointer-events: auto;
+      }
+
+      #calendar-scroll[data-calendar-type="score"] td.day-cell .day-score-value {
+        display: none;
       }
 
       #calendar-scroll[data-calendar-type="notes"] td.day-cell .day-state-row,
