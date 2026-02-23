@@ -37,6 +37,7 @@ export const DEFAULT_CAMERA_ZOOM = 3;
 const CALENDAR_DAY_STATES_STORAGE_KEY = "justcal-calendar-day-states";
 const LEGACY_DAY_STATE_STORAGE_KEY = "justcal-day-states";
 const DEFAULT_CALENDAR_ID = "energy-tracker";
+const DEFAULT_CALENDAR_COLOR = "blue";
 const CALENDAR_TYPE_SIGNAL = "signal-3";
 const CALENDAR_TYPE_SCORE = "score";
 const CALENDAR_TYPE_CHECK = "check";
@@ -55,6 +56,14 @@ const CHECK_MARKED = true;
 const NOTES_HOVER_PREVIEW_DELAY_MS = 1000;
 const NOTES_HOVER_PREVIEW_GAP_PX = 8;
 const NOTES_HOVER_PREVIEW_VIEWPORT_PADDING_PX = 8;
+const CALENDAR_COLOR_HEX_BY_KEY = Object.freeze({
+  green: "#22c55e",
+  red: "#ef4444",
+  orange: "#f97316",
+  yellow: "#facc15",
+  cyan: "#22d3ee",
+  blue: "#3b82f6",
+});
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -102,6 +111,21 @@ function normalizeCalendarType(calendarType) {
     return CALENDAR_TYPE_NOTES;
   }
   return CALENDAR_TYPE_SIGNAL;
+}
+
+function normalizeCalendarColor(colorKey, fallbackColor = DEFAULT_CALENDAR_COLOR) {
+  if (
+    typeof colorKey === "string" &&
+    Object.prototype.hasOwnProperty.call(CALENDAR_COLOR_HEX_BY_KEY, colorKey)
+  ) {
+    return colorKey;
+  }
+  return fallbackColor;
+}
+
+function resolveCalendarColorHex(colorKey, fallbackColor = DEFAULT_CALENDAR_COLOR) {
+  const normalizedColor = normalizeCalendarColor(colorKey, fallbackColor);
+  return CALENDAR_COLOR_HEX_BY_KEY[normalizedColor];
 }
 
 function normalizeScoreDisplay(scoreDisplay) {
@@ -611,10 +635,19 @@ export function initInfiniteCalendar(container, { initialActiveCalendar } = {}) 
     initialCalendarType === CALENDAR_TYPE_SCORE
       ? normalizeScoreDisplay(initialCalendarDisplayRaw)
       : DEFAULT_SCORE_DISPLAY;
+  const initialCalendarColorRaw =
+    typeof initialActiveCalendar === "object" && initialActiveCalendar !== null
+      ? initialActiveCalendar.color
+      : DEFAULT_CALENDAR_COLOR;
+  const initialCalendarColor = normalizeCalendarColor(
+    initialCalendarColorRaw,
+    DEFAULT_CALENDAR_COLOR,
+  );
   let activeCalendarId =
     initialCalendarIdRaw.trim() || DEFAULT_CALENDAR_ID;
   let activeCalendarType = initialCalendarType;
   let activeCalendarDisplay = initialCalendarDisplay;
+  let activeCalendarColor = initialCalendarColor;
   let shouldPanZoomOnDaySelect = true;
   let shouldExpandOnDaySelect = true;
   let hoveredNotesCell = null;
@@ -630,6 +663,10 @@ export function initInfiniteCalendar(container, { initialActiveCalendar } = {}) 
 
   function applyActiveCalendarTypeToContainer() {
     container.dataset.calendarType = activeCalendarType;
+    container.style.setProperty(
+      "--active-calendar-color",
+      resolveCalendarColorHex(activeCalendarColor, DEFAULT_CALENDAR_COLOR),
+    );
     if (activeCalendarType === CALENDAR_TYPE_SCORE) {
       container.dataset.calendarDisplay = activeCalendarDisplay;
       return;
@@ -1360,6 +1397,10 @@ export function initInfiniteCalendar(container, { initialActiveCalendar } = {}) 
       typeof nextCalendar === "object" && nextCalendar !== null
         ? nextCalendar.display
         : DEFAULT_SCORE_DISPLAY;
+    const normalizedCalendarColorRaw =
+      typeof nextCalendar === "object" && nextCalendar !== null
+        ? nextCalendar.color
+        : activeCalendarColor;
 
     const normalizedCalendarId =
       normalizedCalendarIdRaw.trim() || DEFAULT_CALENDAR_ID;
@@ -1368,14 +1409,20 @@ export function initInfiniteCalendar(container, { initialActiveCalendar } = {}) 
       normalizedCalendarType === CALENDAR_TYPE_SCORE
         ? normalizeScoreDisplay(normalizedCalendarDisplayRaw)
         : DEFAULT_SCORE_DISPLAY;
+    const normalizedCalendarColor = normalizeCalendarColor(
+      normalizedCalendarColorRaw,
+      activeCalendarColor || DEFAULT_CALENDAR_COLOR,
+    );
 
     const didChange =
       normalizedCalendarId !== activeCalendarId ||
       normalizedCalendarType !== activeCalendarType ||
-      normalizedCalendarDisplay !== activeCalendarDisplay;
+      normalizedCalendarDisplay !== activeCalendarDisplay ||
+      normalizedCalendarColor !== activeCalendarColor;
     activeCalendarId = normalizedCalendarId;
     activeCalendarType = normalizedCalendarType;
     activeCalendarDisplay = normalizedCalendarDisplay;
+    activeCalendarColor = normalizedCalendarColor;
     applyActiveCalendarTypeToContainer();
     ensureActiveCalendarDayStates();
 

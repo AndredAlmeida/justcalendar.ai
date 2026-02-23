@@ -1187,7 +1187,7 @@
         padding: 0;
         border-radius: 0;
         background: transparent;
-        color: color-mix(in srgb, #22c55e 62%, var(--ink) 38%);
+        color: var(--active-calendar-color, #22c55e);
         font-size: calc(0.88rem * 1.5);
         font-weight: 800;
         line-height: 1;
@@ -2509,7 +2509,7 @@
       }
 
       :root.dark td.day-cell[data-day-checked="true"]::after {
-        color: color-mix(in srgb, #86efac 76%, #f8fafc 24%);
+        color: var(--active-calendar-color, #22c55e);
       }
 
       :root.dark #calendar-scroll[data-calendar-type="notes"] td.day-cell[data-day-note]:not(.selected-day)::after {
