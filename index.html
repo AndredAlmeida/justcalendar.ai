@@ -315,10 +315,10 @@
       }
 
       .calendar-current-type-icon.calendar-option-type-icon {
-        width: 0.82rem;
-        height: 0.82rem;
-        flex: 0 0 0.82rem;
-        border-radius: 0.2rem;
+        width: calc(0.82rem + 6px);
+        height: calc(0.82rem + 6px);
+        flex: 0 0 calc(0.82rem + 6px);
+        border-radius: 999px;
       }
 
       .calendar-current-name {
@@ -1569,10 +1569,10 @@
         --calendar-type-icon-color: #3b82f6;
         display: inline-grid;
         place-items: center;
-        width: 0.96rem;
-        height: 0.96rem;
-        flex: 0 0 0.96rem;
-        border-radius: 0.24rem;
+        width: calc(0.96rem + 6px);
+        height: calc(0.96rem + 6px);
+        flex: 0 0 calc(0.96rem + 6px);
+        border-radius: 999px;
         background: color-mix(
           in srgb,
           var(--muted) 74%,
@@ -1589,8 +1589,8 @@
 
       .calendar-option-type-icon.is-signal::before {
         content: "";
-        width: 0.16rem;
-        height: 0.16rem;
+        width: calc(0.16rem + 1px);
+        height: calc(0.16rem + 1px);
         border-radius: 999px;
         background: currentColor;
         box-shadow:
@@ -1604,14 +1604,14 @@
 
       .calendar-option-type-icon.is-score::before {
         content: "\2605";
-        font-size: 0.58rem;
+        font-size: calc(0.58rem + 1px);
         line-height: 1;
         font-weight: 700;
       }
 
       .calendar-option-type-icon.is-check {
         color: color-mix(in srgb, var(--calendar-type-icon-color) 84%, #ffffff 16%);
-        font-size: 0.7rem;
+        font-size: calc(0.7rem + 1px);
         font-weight: 850;
         line-height: 1;
       }
@@ -1623,7 +1623,7 @@
 
       .calendar-option-type-icon.is-notes {
         color: color-mix(in srgb, var(--calendar-type-icon-color) 84%, #ffffff 16%);
-        font-size: 0.63rem;
+        font-size: calc(0.63rem + 1px);
         font-weight: 850;
         line-height: 1;
       }
