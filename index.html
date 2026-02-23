@@ -838,14 +838,43 @@
         backdrop-filter: none;
       }
 
-      #calendar-scroll[data-calendar-type="score"] td.day-cell:hover .day-score-row,
-      #calendar-scroll[data-calendar-type="score"] td.day-cell:focus-within .day-score-row {
+      #calendar-scroll[data-calendar-type="score"] td.day-cell:hover .day-score-row {
         opacity: 1;
         pointer-events: auto;
       }
 
       #calendar-scroll[data-calendar-type="score"] td.day-cell .day-score-value {
         display: none;
+      }
+
+      #calendar-scroll[data-calendar-type="score"] td.day-cell[data-day-score]:not(.selected-day)::after {
+        width: 1.8rem;
+        height: 1.8rem;
+        min-width: 0;
+        padding: 0;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+        background: color-mix(in srgb, var(--muted) 84%, var(--panel) 16%);
+        box-shadow:
+          0 2px 8px color-mix(in srgb, #0f172a 12%, transparent),
+          inset 0 1px 0 color-mix(in srgb, #ffffff 50%, transparent);
+        display: inline-grid;
+        place-items: center;
+        text-align: center;
+        font-family: "Avenir Next", "Segoe UI", "Trebuchet MS", sans-serif;
+        font-size: 0.96rem;
+        font-weight: 820;
+        letter-spacing: 0.012em;
+        font-variant-numeric: tabular-nums;
+        text-shadow:
+          0 1px 0 color-mix(in srgb, #ffffff 44%, transparent),
+          0 2px 10px color-mix(in srgb, #0f172a 18%, transparent);
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
+
+      #calendar-scroll[data-calendar-type="score"] td.day-cell[data-day-score]:not(.selected-day):hover::after {
+        transform: translate(-50%, calc(-50% - 8px));
       }
 
       #calendar-scroll[data-calendar-type="notes"] td.day-cell .day-state-row,
@@ -2164,6 +2193,18 @@
 
       :root.dark td.day-cell[data-day-score]:not(.selected-day)::after {
         color: #c7d2fe;
+      }
+
+      :root.dark #calendar-scroll[data-calendar-type="score"] td.day-cell[data-day-score]:not(.selected-day)::after {
+        border-color: color-mix(in srgb, #64748b 58%, transparent);
+        background: color-mix(in srgb, var(--muted) 62%, #0b1224 38%);
+        box-shadow:
+          0 2px 10px rgba(2, 6, 23, 0.45),
+          inset 0 1px 0 color-mix(in srgb, #ffffff 14%, transparent);
+        color: color-mix(in srgb, #dbeafe 90%, #ffffff 10%);
+        text-shadow:
+          0 1px 0 rgba(15, 23, 42, 0.68),
+          0 2px 10px rgba(2, 6, 23, 0.5);
       }
 
       :root.dark .day-note-input {
