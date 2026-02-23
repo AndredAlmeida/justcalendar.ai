@@ -1567,30 +1567,38 @@
 
       .calendar-option-type-icon {
         --calendar-type-icon-color: #3b82f6;
+        --calendar-type-icon-fill: color-mix(
+          in srgb,
+          var(--muted) 74%,
+          var(--calendar-type-icon-color) 26%
+        );
+        --calendar-type-icon-content: color-mix(
+          in srgb,
+          var(--calendar-type-icon-color) 78%,
+          #ffffff 22%
+        );
         display: inline-grid;
         place-items: center;
         width: calc(0.96rem + 6px);
         height: calc(0.96rem + 6px);
         flex: 0 0 calc(0.96rem + 6px);
         border-radius: 999px;
-        background: color-mix(
-          in srgb,
-          var(--muted) 74%,
-          var(--calendar-type-icon-color) 26%
-        );
-        border: 1px solid
-          color-mix(in srgb, var(--line) 58%, var(--calendar-type-icon-color) 42%);
-        color: color-mix(in srgb, var(--calendar-type-icon-color) 78%, #ffffff 22%);
+        background: var(--calendar-type-icon-content);
+        color: var(--calendar-type-icon-fill);
       }
 
       .calendar-option-type-icon.is-signal {
-        color: color-mix(in srgb, var(--calendar-type-icon-color) 82%, #ffffff 18%);
+        --calendar-type-icon-content: color-mix(
+          in srgb,
+          var(--calendar-type-icon-color) 82%,
+          #ffffff 18%
+        );
       }
 
       .calendar-option-type-icon.is-signal::before {
         content: "";
-        width: calc(0.16rem + 1px);
-        height: calc(0.16rem + 1px);
+        width: calc(0.16rem + 3px);
+        height: calc(0.16rem + 3px);
         border-radius: 999px;
         background: currentColor;
         box-shadow:
@@ -1599,31 +1607,44 @@
       }
 
       .calendar-option-type-icon.is-score {
-        color: color-mix(in srgb, var(--calendar-type-icon-color) 84%, #ffffff 16%);
+        --calendar-type-icon-content: color-mix(
+          in srgb,
+          var(--calendar-type-icon-color) 84%,
+          #ffffff 16%
+        );
       }
 
       .calendar-option-type-icon.is-score::before {
         content: "\2605";
-        font-size: calc(0.58rem + 1px);
+        font-size: calc(0.58rem + 3px);
         line-height: 1;
         font-weight: 700;
+        transform: translateY(1px);
       }
 
       .calendar-option-type-icon.is-check {
-        color: color-mix(in srgb, var(--calendar-type-icon-color) 84%, #ffffff 16%);
-        font-size: calc(0.7rem + 1px);
+        --calendar-type-icon-content: color-mix(
+          in srgb,
+          var(--calendar-type-icon-color) 84%,
+          #ffffff 16%
+        );
+        font-size: calc(0.7rem + 3px);
         font-weight: 850;
         line-height: 1;
       }
 
       .calendar-option-type-icon.is-check::before {
         content: "\2713";
-        transform: translateX(-1px);
+        transform: translate(-1px, 1px);
       }
 
       .calendar-option-type-icon.is-notes {
-        color: color-mix(in srgb, var(--calendar-type-icon-color) 84%, #ffffff 16%);
-        font-size: calc(0.63rem + 1px);
+        --calendar-type-icon-content: color-mix(
+          in srgb,
+          var(--calendar-type-icon-color) 84%,
+          #ffffff 16%
+        );
+        font-size: calc(0.63rem + 5px);
         font-weight: 850;
         line-height: 1;
       }
