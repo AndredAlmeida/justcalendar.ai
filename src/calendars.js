@@ -847,6 +847,113 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
       });
   };
 
+  const animatePinnedHeaderSelectionToActiveButton = (flightSnapshot) => {
+    if (!button || !flightSnapshot) {
+      return;
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+
+    const { element, rect } = flightSnapshot;
+    if (!element || !rect) {
+      return;
+    }
+
+    const targetRect = button.getBoundingClientRect();
+    if (
+      rect.width <= 0 ||
+      rect.height <= 0 ||
+      targetRect.width <= 0 ||
+      targetRect.height <= 0
+    ) {
+      return;
+    }
+
+    const flightChip = element.cloneNode(true);
+    flightChip.setAttribute("aria-hidden", "true");
+    flightChip.tabIndex = -1;
+    flightChip.style.position = "fixed";
+    flightChip.style.left = `${rect.left}px`;
+    flightChip.style.top = `${rect.top}px`;
+    flightChip.style.width = `${rect.width}px`;
+    flightChip.style.height = `${rect.height}px`;
+    flightChip.style.margin = "0";
+    flightChip.style.pointerEvents = "none";
+    flightChip.style.zIndex = "98";
+    flightChip.style.willChange = "transform, opacity";
+    flightChip.style.transformOrigin = "left center";
+    document.body.appendChild(flightChip);
+
+    const deltaX = targetRect.left - rect.left;
+    const deltaY = targetRect.top - rect.top;
+    const scaleX = targetRect.width / rect.width;
+    const scaleY = targetRect.height / rect.height;
+    const targetTransform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`;
+
+    const cleanupFlightChip = () => {
+      flightChip.remove();
+    };
+
+    if (typeof flightChip.animate === "function") {
+      const chipAnimation = flightChip.animate(
+        [
+          {
+            transform: "translate(0, 0) scale(1)",
+            opacity: 0.92,
+          },
+          {
+            transform: targetTransform,
+            opacity: 0,
+          },
+        ],
+        {
+          duration: 420,
+          easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+          fill: "forwards",
+        },
+      );
+      chipAnimation.addEventListener("finish", cleanupFlightChip, { once: true });
+      chipAnimation.addEventListener("cancel", cleanupFlightChip, { once: true });
+    } else {
+      flightChip.style.transition = "none";
+      flightChip.style.transform = "translate(0, 0) scale(1)";
+      flightChip.style.opacity = "0.92";
+      // Force style flush so fallback transition starts from previous position.
+      void flightChip.offsetWidth;
+      flightChip.style.transition =
+        "transform 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 360ms ease-out";
+      flightChip.style.transform = targetTransform;
+      flightChip.style.opacity = "0";
+      window.setTimeout(cleanupFlightChip, 480);
+    }
+
+    if (typeof button.animate === "function") {
+      button.animate(
+        [
+          {
+            transform: "translateX(-6px)",
+            opacity: 0.94,
+          },
+          {
+            transform: "translateX(0)",
+            opacity: 1,
+          },
+        ],
+        {
+          duration: 420,
+          easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+          fill: "none",
+        },
+      );
+    }
+  };
+
   const renderCalendarList = () => {
     const previousRectsById = readCalendarOptionRects();
     const pinnedCalendarsCount = countPinnedCalendars(calendars);
@@ -1074,10 +1181,15 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
       }
 
       const nextCalendarId = pinnedButton.dataset.calendarId || "";
+      const flightSnapshot = {
+        element: pinnedButton.cloneNode(true),
+        rect: pinnedButton.getBoundingClientRect(),
+      };
       const didChangeCalendar = setActiveCalendarId(nextCalendarId);
       if (!didChangeCalendar) {
         return;
       }
+      animatePinnedHeaderSelectionToActiveButton(flightSnapshot);
 
       resetAddEditor();
       resetEditEditor();
