@@ -792,6 +792,11 @@
           --score-slider-track,
           color-mix(in srgb, var(--line) 52%, var(--panel) 48%)
         );
+        --score-track-visible: color-mix(
+          in srgb,
+          var(--score-track) 74%,
+          var(--ink) 26%
+        );
         --score-track-active: var(
           --score-slider-active,
           color-mix(in srgb, #3b82f6 58%, #22d3ee 42%)
@@ -813,12 +818,12 @@
           90deg,
           var(--score-track-active) 0%,
           var(--score-track-active) var(--score-progress),
-          var(--score-track) var(--score-progress),
-          var(--score-track) 100%
+          var(--score-track-visible) var(--score-progress),
+          var(--score-track-visible) 100%
         );
         box-shadow:
           inset 0 1px 2px rgba(15, 23, 42, 0.2),
-          inset 0 0 0 1px color-mix(in srgb, var(--line) 54%, transparent);
+          inset 0 0 0 1px color-mix(in srgb, var(--line) 66%, transparent);
         cursor: pointer;
         transition:
           filter 0.18s ease,
@@ -852,7 +857,7 @@
         height: 0.36rem;
         border-radius: 999px;
         border: 0;
-        background: var(--score-track);
+        background: var(--score-track-visible);
       }
 
       .day-score-slider::-moz-range-progress {
