@@ -484,6 +484,7 @@ function setEditCalendarEditorExpanded({
 export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
   const switcher = document.getElementById("calendar-switcher");
   const headerPinnedCalendars = document.getElementById("header-pinned-calendars");
+  const calendarOptions = document.getElementById("calendar-options");
   const calendarList = document.getElementById("calendar-list");
   const addShell = document.getElementById("calendar-add-shell");
   const addTrigger = document.getElementById("calendar-add-trigger");
@@ -500,6 +501,7 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
   const addTypeOptionButtons = addTypeMenu
     ? [...addTypeMenu.querySelectorAll(".calendar-add-type-option[data-value]")]
     : [];
+  const addTypeShell = addTypeSelect?.closest(".calendar-add-type-shell") || null;
   const addDisplayField = document.getElementById("new-calendar-display-field");
   const addDisplaySelect = document.getElementById("new-calendar-display");
   const addColorOptions = document.getElementById("new-calendar-color");
@@ -556,6 +558,10 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
     [CALENDAR_TYPE_CHECK]: "Check",
     [CALENDAR_TYPE_NOTES]: "Notes",
   });
+  const ADD_TYPE_MENU_GAP_PX = 6;
+  const ADD_TYPE_MENU_VIEWPORT_PADDING_PX = 8;
+  let addTypeMenuPositionFrame = 0;
+  let isAddTypeMenuFloating = false;
 
   const resolveAddEditorSelectedColorHex = () => {
     const selectedAddColorButton = addColorButtons.find((candidateButton) => {
@@ -568,12 +574,114 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
     return resolveCalendarColorHex(selectedAddColor, DEFAULT_CALENDAR_COLOR);
   };
 
+  const clearAddTypeMenuFloatingStyles = () => {
+    if (!addTypeMenu) return;
+    addTypeMenu.style.removeProperty("top");
+    addTypeMenu.style.removeProperty("left");
+    addTypeMenu.style.removeProperty("width");
+    addTypeMenu.style.removeProperty("max-height");
+    addTypeMenu.style.removeProperty("overflow-y");
+  };
+
+  const restoreAddTypeMenuToShell = () => {
+    if (!addTypeMenu || !addTypeShell) return;
+    if (addTypeMenu.parentElement !== addTypeShell) {
+      addTypeShell.append(addTypeMenu);
+    }
+    addTypeMenu.classList.remove("is-floating");
+    isAddTypeMenuFloating = false;
+    clearAddTypeMenuFloatingStyles();
+  };
+
+  const floatAddTypeMenuToBody = () => {
+    if (!addTypeMenu || typeof document === "undefined") return;
+    if (addTypeMenu.parentElement !== document.body) {
+      document.body.append(addTypeMenu);
+    }
+    addTypeMenu.classList.add("is-floating");
+    isAddTypeMenuFloating = true;
+  };
+
+  const positionFloatingAddTypeMenu = () => {
+    if (
+      !isAddTypeMenuFloating ||
+      !addTypeMenu ||
+      addTypeMenu.hidden ||
+      !addTypeTrigger ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+
+    const triggerRect = addTypeTrigger.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const spaceBelow =
+      viewportHeight - triggerRect.bottom - ADD_TYPE_MENU_VIEWPORT_PADDING_PX;
+    const spaceAbove = triggerRect.top - ADD_TYPE_MENU_VIEWPORT_PADDING_PX;
+    const shouldOpenAbove = spaceBelow < 110 && spaceAbove > spaceBelow;
+
+    const maxMenuHeight = Math.max(
+      96,
+      (shouldOpenAbove ? spaceAbove : spaceBelow) - ADD_TYPE_MENU_GAP_PX,
+    );
+    addTypeMenu.style.width = `${Math.max(0, triggerRect.width)}px`;
+    addTypeMenu.style.maxHeight = `${maxMenuHeight}px`;
+    addTypeMenu.style.overflowY = "auto";
+    addTypeMenu.style.left = `${Math.max(ADD_TYPE_MENU_VIEWPORT_PADDING_PX, triggerRect.left)}px`;
+
+    const top = shouldOpenAbove
+      ? Math.max(
+          ADD_TYPE_MENU_VIEWPORT_PADDING_PX,
+          triggerRect.top - addTypeMenu.offsetHeight - ADD_TYPE_MENU_GAP_PX,
+        )
+      : Math.min(
+          viewportHeight - ADD_TYPE_MENU_VIEWPORT_PADDING_PX - addTypeMenu.offsetHeight,
+          triggerRect.bottom + ADD_TYPE_MENU_GAP_PX,
+        );
+    addTypeMenu.style.top = `${Math.max(ADD_TYPE_MENU_VIEWPORT_PADDING_PX, top)}px`;
+  };
+
+  const scheduleAddTypeMenuPositionUpdate = () => {
+    if (!isAddTypeMenuFloating || !addTypeMenu || addTypeMenu.hidden) return;
+    if (addTypeMenuPositionFrame) return;
+    addTypeMenuPositionFrame = requestAnimationFrame(() => {
+      addTypeMenuPositionFrame = 0;
+      positionFloatingAddTypeMenu();
+    });
+  };
+
+  const handleAddTypeMenuViewportChange = () => {
+    scheduleAddTypeMenuPositionUpdate();
+  };
+
   const setAddTypeMenuExpanded = (isExpanded) => {
     if (!addTypeTrigger || !addTypeMenu || !addShell) return;
     const shouldExpand = Boolean(isExpanded) && addShell.classList.contains("is-editing");
     addTypeMenu.hidden = !shouldExpand;
     addTypeTrigger.classList.toggle("is-expanded", shouldExpand);
     addTypeTrigger.setAttribute("aria-expanded", String(shouldExpand));
+
+    if (shouldExpand) {
+      floatAddTypeMenuToBody();
+      scheduleAddTypeMenuPositionUpdate();
+      window.addEventListener("resize", handleAddTypeMenuViewportChange, { passive: true });
+      if (calendarOptions) {
+        calendarOptions.addEventListener("scroll", handleAddTypeMenuViewportChange, {
+          passive: true,
+        });
+      }
+      return;
+    }
+
+    if (addTypeMenuPositionFrame) {
+      cancelAnimationFrame(addTypeMenuPositionFrame);
+      addTypeMenuPositionFrame = 0;
+    }
+    window.removeEventListener("resize", handleAddTypeMenuViewportChange);
+    if (calendarOptions) {
+      calendarOptions.removeEventListener("scroll", handleAddTypeMenuViewportChange);
+    }
+    restoreAddTypeMenuToShell();
   };
 
   const syncAddTypeDisplay = () => {
@@ -1669,15 +1777,25 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
 
   document.addEventListener("click", (event) => {
     const clickedElement = event.target instanceof Element ? event.target : null;
+    const clickedInsideTypeMenu = Boolean(
+      addTypeMenu && clickedElement && addTypeMenu.contains(clickedElement),
+    );
+    const clickedInsideTypeShell = Boolean(
+      clickedElement && clickedElement.closest(".calendar-add-type-shell"),
+    );
     if (
       addTypeMenu &&
       !addTypeMenu.hidden &&
-      (!clickedElement || !clickedElement.closest(".calendar-add-type-shell"))
+      !clickedInsideTypeMenu &&
+      !clickedInsideTypeShell
     ) {
       setAddTypeMenuExpanded(false);
     }
 
     if (!switcher.classList.contains("is-expanded")) {
+      return;
+    }
+    if (clickedInsideTypeMenu) {
       return;
     }
     if (clickedElement && switcher.contains(clickedElement)) {

@@ -1873,6 +1873,7 @@
       .calendar-add-shell.is-editing .calendar-add-editor {
         max-height: calc(22rem + 6px);
         opacity: 1;
+        overflow: visible;
         pointer-events: auto;
         transform: translateY(0);
         padding-top: 3px;
@@ -2042,6 +2043,14 @@
           0 10px 18px color-mix(in srgb, #0f172a 18%, transparent),
           inset 0 1px 0 color-mix(in srgb, #ffffff 14%, transparent);
         z-index: 10;
+      }
+
+      .calendar-add-type-menu.is-floating {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: auto;
+        z-index: 220;
       }
 
       .calendar-add-type-menu[hidden] {
