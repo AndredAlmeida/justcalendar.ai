@@ -3377,6 +3377,10 @@
           font-size: calc(0.96rem * 0.7);
         }
 
+        #calendar-scroll[data-calendar-type="score"] td.day-cell[data-day-score]:not(.selected-day):hover::after {
+          transform: translate(-50%, -50%);
+        }
+
         .day-state-row {
           gap: 0.2rem;
         }
@@ -3512,7 +3516,7 @@
         }
 
         #mobile-debug-toggle {
-          display: inline-grid;
+          display: none;
           left: 0.75rem;
           bottom: 0.75rem;
           min-width: 3.75rem;
