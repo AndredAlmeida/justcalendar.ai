@@ -58,6 +58,8 @@ const NOTES_HOVER_PREVIEW_GAP_PX = 8;
 const NOTES_HOVER_PREVIEW_VIEWPORT_PADDING_PX = 8;
 const MOBILE_LAYOUT_QUERY = "(max-width: 640px)";
 const SCORE_MOBILE_TAP_CAMERA_ZOOM = 1.55;
+const SIGNAL_SELECTION_EXPANSION_Y = 1.4;
+const SCORE_SELECTION_EXPANSION_Y = 1.4;
 const CALENDAR_COLOR_HEX_BY_KEY = Object.freeze({
   green: "#22c55e",
   red: "#ef4444",
@@ -737,10 +739,23 @@ export function initInfiniteCalendar(container, { initialActiveCalendar } = {}) 
   }
 
   function getCameraZoomForCell() {
-    if (activeCalendarType === CALENDAR_TYPE_SCORE && isMobileLayout()) {
+    if (
+      isMobileLayout() &&
+      (activeCalendarType === CALENDAR_TYPE_SCORE || activeCalendarType === CALENDAR_TYPE_SIGNAL)
+    ) {
       return clamp(SCORE_MOBILE_TAP_CAMERA_ZOOM, MIN_CAMERA_ZOOM, MAX_CAMERA_ZOOM);
     }
     return clamp(cameraZoom, MIN_CAMERA_ZOOM, MAX_CAMERA_ZOOM);
+  }
+
+  function getRowExpansionYForSelection() {
+    if (activeCalendarType === CALENDAR_TYPE_SIGNAL) {
+      return clamp(SIGNAL_SELECTION_EXPANSION_Y, MIN_CELL_EXPANSION_Y, MAX_CELL_EXPANSION_Y);
+    }
+    if (activeCalendarType === CALENDAR_TYPE_SCORE) {
+      return clamp(SCORE_SELECTION_EXPANSION_Y, MIN_CELL_EXPANSION_Y, MAX_CELL_EXPANSION_Y);
+    }
+    return cellExpansionY;
   }
 
   function setNotesHoverPreviewVisible(isVisible) {
@@ -1032,7 +1047,7 @@ export function initInfiniteCalendar(container, { initialActiveCalendar } = {}) 
     table.style.height = `${totalHeight}px`;
 
     const requestedExpandedRowHeight =
-      bodyHeight * ((cellExpansionY * SELECTED_ROW_HEIGHT_MULTIPLIER) / rowCount);
+      bodyHeight * ((getRowExpansionYForSelection() * SELECTED_ROW_HEIGHT_MULTIPLIER) / rowCount);
     const minOtherRowHeightRatio =
       rowCount <= 4
         ? MIN_OTHER_ROW_HEIGHT_RATIO_SHORT_MONTH
@@ -1773,6 +1788,13 @@ export function initInfiniteCalendar(container, { initialActiveCalendar } = {}) 
     if (dayStateButton && container.contains(dayStateButton)) {
       const dayCell = dayStateButton.closest("td.day-cell");
       if (!dayCell || !container.contains(dayCell)) return;
+      if (
+        activeCalendarType === CALENDAR_TYPE_SIGNAL &&
+        isMobileLayout() &&
+        (!dayCell.classList.contains("selected-day") || !container.classList.contains("is-zoomed"))
+      ) {
+        return;
+      }
       setDayStateForCell(dayCell, dayStateButton.dataset.state);
       return;
     }
@@ -1787,7 +1809,7 @@ export function initInfiniteCalendar(container, { initialActiveCalendar } = {}) 
       activeCalendarType === CALENDAR_TYPE_SIGNAL ||
       activeCalendarType === CALENDAR_TYPE_SCORE
     ) {
-      if (activeCalendarType === CALENDAR_TYPE_SCORE && isMobileLayout()) {
+      if (isMobileLayout()) {
         selectDayCell(dayCell);
       }
       return;

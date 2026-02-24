@@ -3351,8 +3351,24 @@
         }
 
         #calendar-scroll[data-calendar-type="signal-3"] .day-state-btn {
-          width: calc(0.9rem * 0.6);
-          height: calc(0.9rem * 0.6);
+          width: calc(0.9rem * 0.6 * 2.8);
+          height: calc(0.9rem * 0.6 * 2.8);
+        }
+
+        #calendar-scroll[data-calendar-type="signal-3"] td.day-cell .day-state-row {
+          opacity: 0;
+          pointer-events: none;
+          gap: 0.52rem;
+        }
+
+        #calendar-scroll[data-calendar-type="signal-3"] td.day-cell:hover .day-state-row {
+          opacity: 0;
+          pointer-events: none;
+        }
+
+        #calendar-scroll[data-calendar-type="signal-3"] td.day-cell.selected-day .day-state-row {
+          opacity: 1;
+          pointer-events: auto;
         }
 
         #calendar-scroll[data-calendar-type="score"] td.day-cell[data-day-score]:not(.selected-day)::after {
@@ -3377,9 +3393,16 @@
         }
 
         #calendar-scroll[data-calendar-type="score"] td.day-cell.selected-day .day-score-row {
+          --mobile-score-badge-size: calc(1.8rem * 0.7 * 2.5);
+          --mobile-score-badge-center-y: 40%;
           left: 0.24rem;
           right: 0.24rem;
-          top: 66.6667%;
+          top: calc(
+            (
+                100% + var(--mobile-score-badge-center-y) +
+                  (var(--mobile-score-badge-size) / 2)
+              ) / 2
+          );
           bottom: auto;
           width: auto;
           transform: translateY(-50%);
@@ -3391,9 +3414,9 @@
         #calendar-scroll[data-calendar-type="score"] td.day-cell.selected-day[data-day-score]::after {
           content: attr(data-day-score);
           left: 50%;
-          top: 40%;
-          width: calc(1.8rem * 0.7 * 2.5);
-          height: calc(1.8rem * 0.7 * 2.5);
+          top: var(--mobile-score-badge-center-y, 40%);
+          width: var(--mobile-score-badge-size, calc(1.8rem * 0.7 * 2.5));
+          height: var(--mobile-score-badge-size, calc(1.8rem * 0.7 * 2.5));
           min-width: 0;
           padding: 0;
           border-radius: 999px;
