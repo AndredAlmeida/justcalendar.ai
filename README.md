@@ -1,4 +1,4 @@
-# justcalendar.ai
+# [justcalendar.ai](https://justcalendar.ai)
 
 A single-page infinite scrolling calendar built with Vite and vanilla JavaScript.
 Entirely created via a Telegram bot connected to Codex, using Ductor: https://github.com/PleasePrompto/ductor
