@@ -209,6 +209,104 @@
         object-fit: contain;
       }
 
+      #calendar-view-toggle {
+        --view-toggle-pad: 0.2rem;
+        position: relative;
+        isolation: isolate;
+        overflow: hidden;
+        display: inline-grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: center;
+        gap: 0;
+        padding: var(--view-toggle-pad);
+        border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--panel) 88%, transparent);
+        box-shadow: 0 1px 7px color-mix(in srgb, #0f172a 85%, transparent);
+      }
+
+      #calendar-view-toggle::before {
+        content: "";
+        position: absolute;
+        box-sizing: border-box;
+        top: var(--view-toggle-pad);
+        left: var(--view-toggle-pad);
+        bottom: var(--view-toggle-pad);
+        width: calc((100% - (var(--view-toggle-pad) * 2)) / 2);
+        border: 1px solid color-mix(in srgb, var(--score-slider-active) 44%, var(--line) 56%);
+        border-radius: 999px;
+        background: linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--panel) 78%, var(--score-slider-active) 22%) 0%,
+          color-mix(in srgb, var(--panel) 90%, var(--score-slider-active) 10%) 100%
+        );
+        box-shadow:
+          0 1px 8px color-mix(in srgb, #0f172a 84%, transparent),
+          0 0 0 1px color-mix(in srgb, var(--score-slider-active) 26%, transparent);
+        transform: translateX(0);
+        transition:
+          transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+          border-color 0.2s ease,
+          background-color 0.2s ease,
+          box-shadow 0.2s ease;
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      #calendar-view-toggle[data-active-view="year"]::before {
+        transform: translateX(100%);
+      }
+
+      .calendar-view-btn {
+        position: relative;
+        z-index: 1;
+        appearance: none;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        min-width: 0;
+        width: 100%;
+        height: 1.9rem;
+        padding: 0 0.82rem;
+        color: color-mix(in srgb, var(--ink) 68%, transparent);
+        font-size: 0.71rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        background: transparent;
+        cursor: pointer;
+        transition:
+          color 0.16s ease,
+          border-color 0.16s ease,
+          background-color 0.16s ease,
+          box-shadow 0.2s ease,
+          transform 0.16s ease;
+      }
+
+      .calendar-view-btn:hover {
+        color: var(--ink);
+        border-color: color-mix(in srgb, var(--line) 70%, transparent);
+      }
+
+      .calendar-view-btn:not(.is-active):hover {
+        background: color-mix(in srgb, var(--muted) 74%, transparent);
+      }
+
+      .calendar-view-btn:active {
+        transform: translateY(1px);
+      }
+
+      .calendar-view-btn:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--score-slider-active) 72%, #ffffff 28%);
+        outline-offset: 1px;
+      }
+
+      .calendar-view-btn.is-active {
+        color: color-mix(in srgb, var(--ink) 94%, #ffffff 6%);
+        border-color: transparent;
+        background: transparent;
+        text-shadow: 0 1px 0 color-mix(in srgb, #ffffff 25%, transparent);
+      }
+
       #calendar-switcher {
         margin-left: auto;
         position: relative;
@@ -483,6 +581,8 @@
 
       #calendar-scroll {
         --canvas-gap: 1rem;
+        grid-row: 3;
+        min-height: 0;
         overflow-y: auto;
         padding: 1rem;
         scrollbar-width: none;
@@ -507,6 +607,371 @@
         width: 0;
         height: 0;
         display: none;
+      }
+
+      #year-view {
+        grid-row: 3;
+        min-height: 0;
+        overflow: auto;
+        padding: 1rem;
+        scrollbar-width: thin;
+      }
+
+      #year-view[hidden] {
+        display: none !important;
+      }
+
+      #year-view-content {
+        width: min(1420px, 100%);
+        margin: 0 auto;
+        display: grid;
+        gap: 0.9rem;
+        align-content: start;
+      }
+
+      .year-summary-panel {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--panel) 94%, var(--score-slider-active) 6%) 0%,
+          color-mix(in srgb, var(--panel) 98%, transparent) 100%
+        );
+        box-shadow: var(--card-shadow);
+        padding: 0.85rem 0.95rem;
+        display: grid;
+        gap: 0.72rem;
+      }
+
+      .year-summary-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+
+      .year-summary-title {
+        margin: 0;
+        font-size: 1.18rem;
+        font-weight: 760;
+        letter-spacing: 0.01em;
+      }
+
+      .year-summary-title-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.42rem;
+      }
+
+      .year-nav-controls {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.24rem;
+      }
+
+      .year-nav-btn {
+        appearance: none;
+        width: 1.45rem;
+        height: 1.45rem;
+        padding: 0;
+        border: 1px solid color-mix(in srgb, var(--line) 66%, transparent);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--muted) 74%, var(--panel) 26%);
+        color: color-mix(in srgb, var(--ink) 78%, transparent);
+        display: inline-grid;
+        place-items: center;
+        cursor: pointer;
+        transition:
+          transform 0.16s ease,
+          border-color 0.16s ease,
+          background-color 0.16s ease,
+          color 0.16s ease;
+      }
+
+      .year-nav-btn:hover {
+        transform: translateY(-1px);
+        border-color: color-mix(in srgb, var(--score-slider-active) 38%, var(--line) 62%);
+        background: color-mix(in srgb, var(--muted) 58%, var(--score-slider-active) 42%);
+        color: color-mix(in srgb, var(--ink) 92%, #ffffff 8%);
+      }
+
+      .year-nav-btn:active {
+        transform: translateY(0);
+      }
+
+      .year-nav-btn:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--score-slider-active) 68%, #ffffff 32%);
+        outline-offset: 1px;
+      }
+
+      .year-nav-icon {
+        width: 0.56rem;
+        height: 0.56rem;
+        fill: currentColor;
+        display: block;
+      }
+
+      .year-summary-subtitle {
+        margin: 0.16rem 0 0;
+        color: color-mix(in srgb, var(--ink) 70%, transparent);
+        font-size: 0.86rem;
+        font-weight: 560;
+      }
+
+      .year-summary-type {
+        margin: 0;
+        align-self: flex-start;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
+        background: color-mix(in srgb, var(--muted) 62%, transparent);
+        padding: 0.26rem 0.64rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: color-mix(in srgb, var(--ink) 78%, transparent);
+      }
+
+      .year-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 0.52rem;
+      }
+
+      .year-kpi-chip {
+        border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+        border-radius: 12px;
+        padding: 0.46rem 0.56rem;
+        background: color-mix(in srgb, var(--muted) 52%, transparent);
+      }
+
+      .year-kpi-label {
+        margin: 0;
+        font-size: 0.67rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: color-mix(in srgb, var(--ink) 62%, transparent);
+        font-weight: 640;
+      }
+
+      .year-kpi-value {
+        margin: 0.2rem 0 0;
+        font-size: 1.05rem;
+        font-weight: 760;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .year-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.44rem;
+      }
+
+      .year-legend-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+        border-radius: 999px;
+        padding: 0.22rem 0.52rem;
+        background: color-mix(in srgb, var(--muted) 56%, transparent);
+        font-size: 0.68rem;
+        font-weight: 640;
+        color: color-mix(in srgb, var(--ink) 75%, transparent);
+      }
+
+      .year-legend-dot {
+        width: 0.56rem;
+        height: 0.56rem;
+        border-radius: 999px;
+        background: var(--legend-color, var(--year-calendar-color, #3b82f6));
+        box-shadow: 0 0 0 1px color-mix(in srgb, #ffffff 35%, transparent);
+      }
+
+      .year-grid-shell {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: color-mix(in srgb, var(--panel) 98%, transparent);
+        box-shadow: var(--card-shadow);
+        overflow: auto;
+      }
+
+      .year-grid {
+        --year-calendar-color: #3b82f6;
+        width: 100%;
+        min-width: 900px;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+      }
+
+      .year-grid thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: color-mix(in srgb, var(--muted) 88%, var(--panel) 12%);
+      }
+
+      .year-grid th,
+      .year-grid td {
+        border-right: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        height: 2rem;
+        text-align: center;
+        vertical-align: middle;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .year-grid th {
+        padding: 0.18rem 0.22rem;
+        font-size: 0.64rem;
+        letter-spacing: 0.02em;
+        color: color-mix(in srgb, var(--ink) 76%, transparent);
+      }
+
+      .year-grid td {
+        padding: 0;
+        font-size: 0.66rem;
+        font-weight: 670;
+        position: relative;
+      }
+
+      .year-grid tr:last-child td,
+      .year-grid tr:last-child th {
+        border-bottom: 0;
+      }
+
+      .year-grid th:last-child,
+      .year-grid td:last-child {
+        border-right: 0;
+      }
+
+      .year-grid .year-month-name {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        min-width: 6.4rem;
+        width: 6.4rem;
+        text-align: left;
+        padding-left: 0.52rem;
+        font-size: 0.72rem;
+        font-weight: 760;
+        letter-spacing: 0.01em;
+        background: color-mix(in srgb, var(--muted) 86%, var(--panel) 14%);
+        color: var(--ink);
+      }
+
+      .year-grid thead .year-month-name {
+        z-index: 3;
+      }
+
+      .year-grid .year-month-summary {
+        width: 8.1rem;
+        min-width: 8.1rem;
+        vertical-align: middle;
+        text-align: left;
+        padding: 0.12rem 0.45rem;
+        font-size: 0.65rem;
+        letter-spacing: 0.01em;
+        color: color-mix(in srgb, var(--ink) 72%, transparent);
+        background: color-mix(in srgb, var(--panel) 82%, var(--muted) 18%);
+      }
+
+      .year-grid tr.year-month-row-secondary .year-day-cell:not(.has-score-fill):not(.is-empty) {
+        background: color-mix(in srgb, var(--panel) 92%, var(--muted) 8%);
+      }
+
+      .year-day-cell {
+        background: color-mix(in srgb, var(--panel) 96%, transparent);
+      }
+
+      .year-day-cell.is-empty {
+        background: color-mix(in srgb, var(--muted) 62%, transparent);
+      }
+
+      .year-day-number {
+        position: absolute;
+        top: 0.12rem;
+        left: 0.16rem;
+        font-size: 0.5rem;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: 0.01em;
+        color: color-mix(in srgb, var(--ink) 58%, transparent);
+        pointer-events: none;
+      }
+
+      .year-day-cell.has-score-fill .year-day-number {
+        color: color-mix(in srgb, var(--ink) 76%, transparent);
+      }
+
+      .year-day-cell.is-empty .year-day-number {
+        color: color-mix(in srgb, var(--ink) 34%, transparent);
+      }
+
+      .year-day-cell.is-today {
+        box-shadow:
+          inset 0 0 0 1px color-mix(in srgb, var(--year-calendar-color) 62%, #ffffff 38%),
+          inset 0 0 0 2px color-mix(in srgb, var(--year-calendar-color) 28%, transparent);
+      }
+
+      .year-day-value {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+        line-height: 1;
+      }
+
+      .year-day-value.is-signal {
+        color: color-mix(in srgb, var(--ink) 84%, transparent);
+      }
+
+      .year-day-dot {
+        width: 0.56rem;
+        height: 0.56rem;
+        border-radius: 999px;
+        background: var(--signal-color, var(--year-calendar-color));
+      }
+
+      .year-day-value.is-check {
+        color: var(--year-calendar-color);
+        font-size: 0.84rem;
+        font-weight: 820;
+      }
+
+      .year-day-value.is-notes {
+        color: var(--year-calendar-color);
+        font-size: 0.78rem;
+      }
+
+      .year-day-value.is-score {
+        color: color-mix(in srgb, var(--ink) 86%, transparent);
+        font-size: 0.66rem;
+        font-weight: 760;
+      }
+
+      .year-day-cell.has-score-fill {
+        background: color-mix(
+          in srgb,
+          var(--year-calendar-color) var(--score-fill-strength, 0%),
+          var(--panel)
+        );
+      }
+
+      .year-day-cell.has-score-fill .year-day-value.is-score {
+        color: color-mix(in srgb, var(--ink) 88%, transparent);
+        text-shadow: 0 1px 0 color-mix(in srgb, #000000 40%, transparent);
+      }
+
+      .year-day-cell.has-value {
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--year-calendar-color) 26%, transparent);
+      }
+
+      #app.is-year-view #return-to-current {
+        opacity: 0;
+        pointer-events: none;
       }
 
       .month-card {
@@ -1060,7 +1525,8 @@
       #calendar-scroll[data-calendar-type="score"][data-calendar-display="number-heatmap"] td.day-cell[data-day-score]:not(.selected-day) {
         background: color-mix(
           in srgb,
-          var(--score-slider-active) var(--score-heat-intensity, 0%),
+          var(--active-calendar-color, var(--score-slider-active))
+            var(--score-heat-intensity, 0%),
           var(--panel)
         );
       }
@@ -2733,7 +3199,17 @@
 
         .brand-logo {
           height: 1.8rem;
-          max-width: 70vw;
+          max-width: min(42vw, 9.2rem);
+        }
+
+        #calendar-view-toggle {
+          --view-toggle-pad: 0.15rem;
+        }
+
+        .calendar-view-btn {
+          height: 1.68rem;
+          padding: 0 0.5rem;
+          font-size: 0.61rem;
         }
 
         #header-calendars-btn {
@@ -2879,6 +3355,108 @@
           min-width: 2rem;
         }
 
+        #year-view {
+          padding: 0.65rem;
+        }
+
+        #year-view-content {
+          gap: 0.7rem;
+        }
+
+        .year-summary-panel {
+          padding: 0.68rem 0.72rem;
+          border-radius: 12px;
+        }
+
+        .year-summary-title {
+          font-size: 0.98rem;
+        }
+
+        .year-summary-title-row {
+          gap: 0.34rem;
+        }
+
+        .year-nav-controls {
+          gap: 0.18rem;
+        }
+
+        .year-nav-btn {
+          width: 1.28rem;
+          height: 1.28rem;
+          border-radius: 7px;
+        }
+
+        .year-nav-icon {
+          width: 0.5rem;
+          height: 0.5rem;
+        }
+
+        .year-summary-subtitle {
+          font-size: 0.72rem;
+        }
+
+        .year-summary-type {
+          font-size: 0.61rem;
+        }
+
+        .year-kpi-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.44rem;
+        }
+
+        .year-kpi-label {
+          font-size: 0.58rem;
+        }
+
+        .year-kpi-value {
+          font-size: 0.9rem;
+        }
+
+        .year-legend-chip {
+          font-size: 0.6rem;
+        }
+
+        .year-grid-shell {
+          border-radius: 12px;
+        }
+
+        .year-grid {
+          min-width: 760px;
+        }
+
+        .year-grid th,
+        .year-grid td {
+          height: 1.58rem;
+        }
+
+        .year-grid th {
+          font-size: 0.54rem;
+        }
+
+        .year-grid td {
+          font-size: 0.56rem;
+        }
+
+        .year-grid .year-month-name {
+          min-width: 5.2rem;
+          width: 5.2rem;
+          font-size: 0.62rem;
+          padding-left: 0.38rem;
+        }
+
+        .year-grid .year-month-summary {
+          min-width: 7rem;
+          width: 7rem;
+          font-size: 0.55rem;
+          padding: 0.1rem 0.3rem;
+        }
+
+        .year-day-number {
+          top: 0.08rem;
+          left: 0.11rem;
+          font-size: 0.42rem;
+        }
+
         #calendar-switcher.is-expanded #calendar-options {
           width: min(12.5rem, 72vw);
           max-height: calc(100dvh - 6.4rem);
@@ -2974,6 +3552,29 @@
     <div id="app">
       <header>
         <img class="brand-logo" src="/logo-top.png" alt="Just Calendar" />
+        <div
+          id="calendar-view-toggle"
+          role="group"
+          aria-label="Calendar view mode"
+          data-active-view="month"
+        >
+          <button
+            id="view-month-btn"
+            type="button"
+            class="calendar-view-btn is-active"
+            aria-pressed="true"
+          >
+            Month
+          </button>
+          <button
+            id="view-year-btn"
+            type="button"
+            class="calendar-view-btn"
+            aria-pressed="false"
+          >
+            Year
+          </button>
+        </div>
         <div id="calendar-switcher">
           <div id="header-pinned-calendars"></div>
           <div id="calendar-options" aria-label="Calendar options">
@@ -3539,6 +4140,7 @@
         </label>
       </section>
       <main id="calendar-scroll" aria-label="Infinite calendar months"></main>
+      <section id="year-view" aria-label="Year calendar view" hidden></section>
     </div>
     <button
       id="return-to-current"
