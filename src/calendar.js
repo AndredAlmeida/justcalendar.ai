@@ -57,6 +57,7 @@ const NOTES_HOVER_PREVIEW_DELAY_MS = 1000;
 const NOTES_HOVER_PREVIEW_GAP_PX = 8;
 const NOTES_HOVER_PREVIEW_VIEWPORT_PADDING_PX = 8;
 const MOBILE_LAYOUT_QUERY = "(max-width: 640px)";
+const SCORE_MOBILE_TAP_CAMERA_ZOOM = 1.55;
 const CALENDAR_COLOR_HEX_BY_KEY = Object.freeze({
   green: "#22c55e",
   red: "#ef4444",
@@ -735,6 +736,13 @@ export function initInfiniteCalendar(container, { initialActiveCalendar } = {}) 
     return container.contains(focusedElement);
   }
 
+  function getCameraZoomForCell() {
+    if (activeCalendarType === CALENDAR_TYPE_SCORE && isMobileLayout()) {
+      return clamp(SCORE_MOBILE_TAP_CAMERA_ZOOM, MIN_CAMERA_ZOOM, MAX_CAMERA_ZOOM);
+    }
+    return clamp(cameraZoom, MIN_CAMERA_ZOOM, MAX_CAMERA_ZOOM);
+  }
+
   function setNotesHoverPreviewVisible(isVisible) {
     notesHoverPreview.classList.toggle("is-visible", isVisible);
     notesHoverPreview.setAttribute("aria-hidden", String(!isVisible));
@@ -1271,7 +1279,7 @@ export function initInfiniteCalendar(container, { initialActiveCalendar } = {}) 
     }
 
     cleanupZoomResetListeners();
-    const scale = clamp(cameraZoom, MIN_CAMERA_ZOOM, MAX_CAMERA_ZOOM);
+    const scale = getCameraZoomForCell();
     const shouldResetFirst =
       !container.classList.contains("is-zoomed") || !calendarCanvas.style.transform;
 
@@ -1733,6 +1741,13 @@ export function initInfiniteCalendar(container, { initialActiveCalendar } = {}) 
 
     const dayCell = dayScoreSlider.closest("td.day-cell");
     if (!dayCell || !container.contains(dayCell)) return;
+    if (
+      activeCalendarType === CALENDAR_TYPE_SCORE &&
+      isMobileLayout() &&
+      !dayCell.classList.contains("selected-day")
+    ) {
+      return;
+    }
     setDayScoreForCell(dayCell, dayScoreSlider.value);
   });
 
@@ -1772,6 +1787,9 @@ export function initInfiniteCalendar(container, { initialActiveCalendar } = {}) 
       activeCalendarType === CALENDAR_TYPE_SIGNAL ||
       activeCalendarType === CALENDAR_TYPE_SCORE
     ) {
+      if (activeCalendarType === CALENDAR_TYPE_SCORE && isMobileLayout()) {
+        selectDayCell(dayCell);
+      }
       return;
     }
     selectDayCell(dayCell);
