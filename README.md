@@ -1,6 +1,7 @@
 # justcalendar.ai
 
 A single-page infinite scrolling calendar built with Vite and vanilla JavaScript.
+Entirely created via a Telegram bot connected to Codex, using Ductor: https://github.com/PleasePrompto/ductor
 
 ## Features
 
@@ -39,40 +40,6 @@ App scripts:
 - `npm run build` -> production build to `dist/`
 - `npm run preview` -> preview built app
 
-## HTTPS and Cloudflare (Full Mode)
-
-This project is configured to run HTTPS directly from Vite on port `443`.
-Production domain: `justcalendar.ai` (`www.justcalendar.ai`).
-
-Current Vite configuration:
-
-- `host: 0.0.0.0`
-- `port: 443`
-- `strictPort: true`
-- `allowedHosts`: `justcalendar.ai`, `www.justcalendar.ai` (plus internal hosts and legacy `justcal.ai` entries)
-- TLS certificate/key loaded from:
-  - `certs/justcal.ai.crt` (current file name)
-  - `certs/justcal.ai.key` (current file name)
-
-Certificate files are intentionally ignored by git (`certs/` in `.gitignore`).
-
-### Generate a self-signed cert (compatible with Cloudflare `Full`)
-
-```bash
-mkdir -p certs
-openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 3650 \
-  -keyout certs/justcalendar.ai.key \
-  -out certs/justcalendar.ai.crt \
-  -subj "/CN=justcalendar.ai" \
-  -addext "subjectAltName=DNS:justcalendar.ai,DNS:www.justcalendar.ai"
-```
-
-If you use these new file names, update `vite.config.js` certificate paths accordingly.
-
-Cloudflare SSL/TLS mode:
-
-- Use **Full** (not Full strict) when using self-signed origin certs.
-
 ## Browser Storage
 
 The app persists state in `localStorage` using:
@@ -102,10 +69,3 @@ The app persists state in `localStorage` using:
 ├── vite.config.js
 └── package.json
 ```
-
-## Notes for VPS Deployment
-
-- Port `443` usually requires elevated privileges or a reverse proxy.
-- If you run the app as a non-root user, either:
-  - terminate TLS at Nginx/Caddy and proxy to a higher local port, or
-  - grant Node permission to bind low ports.

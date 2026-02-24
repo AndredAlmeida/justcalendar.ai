@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Just Calendar Social Preview</title>
+  <desc id="desc">Just Calendar headline card for link sharing previews.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f1224" />
+      <stop offset="55%" stop-color="#171c34" />
+      <stop offset="100%" stop-color="#1a1d33" />
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7aa2f7" stop-opacity="0.22" />
+      <stop offset="100%" stop-color="#4f46e5" stop-opacity="0.08" />
+    </linearGradient>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <circle cx="1020" cy="96" r="180" fill="#7aa2f7" opacity="0.1" />
+  <circle cx="1108" cy="550" r="220" fill="#22d3ee" opacity="0.08" />
+  <circle cx="180" cy="570" r="180" fill="#22c55e" opacity="0.08" />
+
+  <rect x="40" y="40" width="1120" height="550" rx="28" fill="url(#panel)" stroke="#3a466d" stroke-opacity="0.5" />
+
+  <g transform="translate(98 96) scale(0.37)" filter="url(#softGlow)">
+    <rect x="12" y="12" width="488" height="488" rx="120" fill="#2563eb" />
+    <rect x="96" y="96" width="320" height="320" rx="64" fill="#eff6ff" />
+    <rect x="96" y="96" width="320" height="96" rx="64" fill="#0f172a" />
+    <rect x="96" y="144" width="320" height="48" fill="#0f172a" />
+    <rect x="152" y="60" width="24" height="72" rx="12" fill="#e2e8f0" />
+    <rect x="336" y="60" width="24" height="72" rx="12" fill="#e2e8f0" />
+    <circle cx="256" cy="280" r="56" fill="none" stroke="#1d4ed8" stroke-width="24" />
+    <path d="M256 246v34l24 20" fill="none" stroke="#1d4ed8" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+
+  <text x="318" y="178" fill="#dbeafe" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700" letter-spacing="0.08em" text-transform="uppercase">
+    Just Calendar
+  </text>
+
+  <text x="318" y="256" fill="#f8fafc" font-family="Segoe UI, Arial, sans-serif" font-size="58" font-weight="800">
+    Track Habits, Scores,
+  </text>
+  <text x="318" y="324" fill="#f8fafc" font-family="Segoe UI, Arial, sans-serif" font-size="58" font-weight="800">
+    Notes, and Routines
+  </text>
+
+  <text x="318" y="384" fill="#cbd5e1" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="500">
+    Check, Score, Semaphore, and Notes calendars
+  </text>
+  <text x="318" y="426" fill="#cbd5e1" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="500">
+    in one clean view.
+  </text>
+</svg>
