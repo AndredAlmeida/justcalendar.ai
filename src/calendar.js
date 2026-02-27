@@ -1852,11 +1852,38 @@ export function initInfiniteCalendar(container, { initialActiveCalendar } = {}) 
     }
   });
 
+  function refreshFromStorage() {
+    const reloadedDayStates = loadCalendarDayStates();
+    Object.keys(dayStatesByCalendarId).forEach((calendarId) => {
+      delete dayStatesByCalendarId[calendarId];
+    });
+    Object.entries(reloadedDayStates).forEach(([calendarId, rawDayStates]) => {
+      if (typeof calendarId !== "string" || !calendarId) {
+        return;
+      }
+      dayStatesByCalendarId[calendarId] = normalizeCalendarDayEntries(rawDayStates);
+    });
+    ensureActiveCalendarDayStates();
+    refreshRenderedDayValues();
+
+    if (selectedCell && selectedCell.isConnected) {
+      const selectedDayKey = selectedCell.dataset.dayKey;
+      if (selectedDayKey) {
+        applyDayValueToCell(selectedCell, getDayValueByKey(selectedDayKey), activeCalendarType);
+      }
+    }
+
+    if (hoveredNotesCell && !canShowNotesHoverPreviewForCell(hoveredNotesCell)) {
+      setHoveredNotesCell(null);
+    }
+  }
+
   applyActiveCalendarTypeToContainer();
   initialRender();
   return {
     scrollToPresentDay,
     setActiveCalendar,
+    refreshFromStorage,
     getActiveCalendarId: () => activeCalendarId,
     setPanZoomOnDaySelect,
     getPanZoomOnDaySelect: () => shouldPanZoomOnDaySelect,

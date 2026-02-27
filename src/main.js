@@ -32,6 +32,7 @@ const CALENDARS_STORAGE_KEY = "justcal-calendars";
 const CALENDAR_DAY_STATES_STORAGE_KEY = "justcal-calendar-day-states";
 const LEGACY_DAY_STATE_STORAGE_KEY = "justcal-day-states";
 const THEME_STORAGE_KEY = "justcal-theme";
+const DRIVE_ACCOUNT_ID_STORAGE_KEY = "justcal-drive-account-id";
 const DEFAULT_THEME = "tokyo-night-storm";
 const DEFAULT_CALENDAR_ID = "energy-tracker";
 const DEFAULT_CALENDAR_COLOR = "blue";
@@ -87,6 +88,11 @@ const DATE_LABEL_FORMATTER = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
   year: "numeric",
 });
+const DRIVE_ACCOUNT_ID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const DRIVE_ACCOUNT_ID_CHARSET_SIZE = DRIVE_ACCOUNT_ID_ALPHABET.length;
+const DRIVE_ACCOUNT_ID_LENGTH = 22;
+const DRIVE_ACCOUNT_ID_PATTERN = /^[A-Za-z0-9]{12,48}$/;
+const LEGACY_DRIVE_ACCOUNT_ID_PATTERN = /^acc_[A-Za-z0-9][A-Za-z0-9_-]{5,63}$/;
 
 const MIN_FADE_DELTA = 0;
 const MAX_FADE_DELTA = 100;
@@ -104,6 +110,81 @@ const COLOR_PROBE_STYLE = `
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function isValidDriveAccountId(rawValue) {
+  const candidateId = typeof rawValue === "string" ? rawValue.trim() : "";
+  if (!candidateId || candidateId === "acc_default") {
+    return false;
+  }
+  return DRIVE_ACCOUNT_ID_PATTERN.test(candidateId) || LEGACY_DRIVE_ACCOUNT_ID_PATTERN.test(candidateId);
+}
+
+function generateDriveAccountId(length = DRIVE_ACCOUNT_ID_LENGTH) {
+  const tokenLength = Number.isInteger(length) && length > 0 ? length : DRIVE_ACCOUNT_ID_LENGTH;
+  const randomSource =
+    typeof crypto !== "undefined" && crypto && typeof crypto.getRandomValues === "function"
+      ? crypto
+      : null;
+  let nextId = "";
+  while (nextId.length < tokenLength) {
+    const randomChunk = new Uint8Array(Math.max(tokenLength * 2, 16));
+    if (randomSource) {
+      randomSource.getRandomValues(randomChunk);
+    } else {
+      for (let index = 0; index < randomChunk.length; index += 1) {
+        randomChunk[index] = Math.floor(Math.random() * 256);
+      }
+    }
+
+    for (const rawByte of randomChunk) {
+      if (rawByte >= 248) {
+        continue;
+      }
+      nextId += DRIVE_ACCOUNT_ID_ALPHABET[rawByte % DRIVE_ACCOUNT_ID_CHARSET_SIZE];
+      if (nextId.length >= tokenLength) {
+        break;
+      }
+    }
+  }
+  return nextId;
+}
+
+function readStoredDriveAccountId() {
+  try {
+    const storedAccountId = localStorage.getItem(DRIVE_ACCOUNT_ID_STORAGE_KEY);
+    if (!isValidDriveAccountId(storedAccountId)) {
+      return "";
+    }
+    return storedAccountId.trim();
+  } catch {
+    return "";
+  }
+}
+
+function persistDriveAccountId(rawAccountId) {
+  if (!isValidDriveAccountId(rawAccountId)) {
+    return false;
+  }
+  try {
+    localStorage.setItem(DRIVE_ACCOUNT_ID_STORAGE_KEY, rawAccountId.trim());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getOrCreateDriveAccountId() {
+  const storedAccountId = readStoredDriveAccountId();
+  if (storedAccountId) {
+    return storedAccountId;
+  }
+
+  const generatedAccountId = generateDriveAccountId();
+  if (persistDriveAccountId(generatedAccountId)) {
+    return generatedAccountId;
+  }
+  return generatedAccountId;
 }
 
 function mixRgb(baseColor, targetColor, amount) {
@@ -873,6 +954,8 @@ const calendarApi = calendarContainer
       initialActiveCalendar,
     })
   : null;
+let calendarSwitcherApi = null;
+let themeToggleApi = null;
 let activeCalendar = initialActiveCalendar;
 let currentViewMode = VIEW_MODE_MONTH;
 let activeYearViewYear = YEAR_VIEW_YEAR;
@@ -1031,7 +1114,7 @@ function setupTelegramLogPanel({ toggleButton, panel, backdrop, closeButton }) {
   });
 }
 
-function setupProfileSwitcher({ switcher, button, options }) {
+function setupProfileSwitcher({ switcher, button, options, onDriveStateImported }) {
   const optionButtons = [...options.querySelectorAll("[data-profile-action]")];
   const googleDriveButton = options.querySelector('[data-profile-action="google-drive"]');
   const googleDriveLabel = options.querySelector("#profile-google-drive-label");
@@ -1039,7 +1122,6 @@ function setupProfileSwitcher({ switcher, button, options }) {
   const driveBusyOverlay = document.getElementById("drive-busy-overlay");
   const GOOGLE_CONNECTED_COOKIE_NAME = "justcal_google_connected";
   const GOOGLE_AUTH_LOG_PREFIX = "[JustCalendar][GoogleDriveAuth]";
-  const DRIVE_BOOTSTRAP_SKIP_ONCE_KEY = "justcal_drive_bootstrap_skip_once";
   let isGoogleDriveConnected = false;
   let isGoogleDriveConfigured = true;
   let googleSub = "";
@@ -1055,28 +1137,6 @@ function setupProfileSwitcher({ switcher, button, options }) {
     }
     logger(`${GOOGLE_AUTH_LOG_PREFIX} ${message}`, details);
   };
-
-  const consumeBootstrapSkipOnce = () => {
-    try {
-      if (sessionStorage.getItem(DRIVE_BOOTSTRAP_SKIP_ONCE_KEY) === "1") {
-        sessionStorage.removeItem(DRIVE_BOOTSTRAP_SKIP_ONCE_KEY);
-        return true;
-      }
-    } catch {
-      // Ignore storage failures.
-    }
-    return false;
-  };
-
-  const markBootstrapSkipOnce = () => {
-    try {
-      sessionStorage.setItem(DRIVE_BOOTSTRAP_SKIP_ONCE_KEY, "1");
-    } catch {
-      // Ignore storage failures.
-    }
-  };
-
-  hasBootstrappedDriveConfig = consumeBootstrapSkipOnce();
 
   const setDriveBusy = (isBusy) => {
     if (!driveBusyOverlay) return;
@@ -1140,6 +1200,18 @@ function setupProfileSwitcher({ switcher, button, options }) {
     if (googleDriveButton) {
       googleDriveButton.textContent = nextLabel;
     }
+  };
+
+  const syncStoredDriveAccountIdFromPayload = (payload) => {
+    const accountId =
+      payload && typeof payload === "object" && typeof payload.accountId === "string"
+        ? payload.accountId.trim()
+        : "";
+    if (!accountId) {
+      return "";
+    }
+    persistDriveAccountId(accountId);
+    return accountId;
   };
 
   const reorderGoogleDriveOption = (connected) => {
@@ -1318,13 +1390,15 @@ function setupProfileSwitcher({ switcher, button, options }) {
       },
     ];
 
+    const currentAccountId = getOrCreateDriveAccountId();
+
     try {
       const rawStoredCalendarsState = localStorage.getItem(CALENDARS_STORAGE_KEY);
       const storedDayStatesByCalendarId = readBootstrapCalendarDayStates();
       if (!rawStoredCalendarsState) {
         return {
           currentAccount: "default",
-          currentAccountId: "acc_default",
+          currentAccountId,
           currentCalendarId: fallbackCalendars[0]?.id || "",
           selectedTheme: readStoredThemeForDrive() || DEFAULT_THEME,
           calendars: fallbackCalendars,
@@ -1385,7 +1459,7 @@ function setupProfileSwitcher({ switcher, button, options }) {
 
       return {
         currentAccount: "default",
-        currentAccountId: "acc_default",
+        currentAccountId,
         currentCalendarId: resolvedActiveCalendarId,
         selectedTheme: readStoredThemeForDrive() || DEFAULT_THEME,
         calendars: normalizedCalendars.length > 0 ? normalizedCalendars : fallbackCalendars,
@@ -1393,7 +1467,7 @@ function setupProfileSwitcher({ switcher, button, options }) {
     } catch {
       return {
         currentAccount: "default",
-        currentAccountId: "acc_default",
+        currentAccountId,
         currentCalendarId: fallbackCalendars[0]?.id || "",
         selectedTheme: readStoredThemeForDrive() || DEFAULT_THEME,
         calendars: fallbackCalendars,
@@ -1612,19 +1686,22 @@ function setupProfileSwitcher({ switcher, button, options }) {
           return;
         }
 
+        syncStoredDriveAccountIdFromPayload(payload);
+
         const shouldImportRemoteState =
           payload?.configSource === "existing" && isObjectLike(payload?.remoteState);
         if (shouldImportRemoteState) {
           const importedFromDrive = syncLocalStateFromDrive(payload);
           if (importedFromDrive) {
             hasBootstrappedDriveConfig = true;
-            markBootstrapSkipOnce();
             logGoogleAuthMessage(
               "info",
               "Loaded calendars and data from Google Drive and replaced local state.",
             );
+            if (typeof onDriveStateImported === "function") {
+              onDriveStateImported(payload);
+            }
             setExpanded(false);
-            window.location.reload();
             return;
           }
         }
@@ -1918,6 +1995,7 @@ function setupProfileSwitcher({ switcher, button, options }) {
               payload,
             });
           } else {
+            syncStoredDriveAccountIdFromPayload(payload);
             logGoogleAuthMessage(
               "info",
               "Saved current calendar state to Google Drive.",
@@ -1981,12 +2059,14 @@ function setupProfileSwitcher({ switcher, button, options }) {
               payload,
             });
           } else if (!isObjectLike(payload?.remoteState)) {
+            syncStoredDriveAccountIdFromPayload(payload);
             logGoogleAuthMessage(
               "warn",
               "Load completed, but no remote state was found in Google Drive.",
               payload,
             );
           } else {
+            syncStoredDriveAccountIdFromPayload(payload);
             const importedFromDrive = syncLocalStateFromDrive(payload);
             if (importedFromDrive) {
               hasBootstrappedDriveConfig = true;
@@ -1994,8 +2074,10 @@ function setupProfileSwitcher({ switcher, button, options }) {
                 "info",
                 "Loaded calendars and data from Google Drive and replaced local state.",
               );
+              if (typeof onDriveStateImported === "function") {
+                onDriveStateImported(payload);
+              }
               setExpanded(false);
-              window.location.reload();
               return;
             }
             logGoogleAuthMessage("info", "Load finished; local state already matched Drive.");
@@ -2308,16 +2390,24 @@ const jumpToPresentDay = () => {
   calendarApi?.scrollToPresentDay?.();
 };
 
-if (themeToggleButton) {
-  setupThemeToggle(themeToggleButton);
-}
+const applyDriveImportedStateInPlace = () => {
+  themeToggleApi?.syncFromStorage?.();
+  calendarApi?.refreshFromStorage?.();
 
-if (profileSwitcher && headerProfileButton && profileOptions) {
-  setupProfileSwitcher({
-    switcher: profileSwitcher,
-    button: headerProfileButton,
-    options: profileOptions,
-  });
+  const nextActiveCalendar =
+    calendarSwitcherApi?.syncFromStorage?.({ notify: false }) || getStoredActiveCalendar();
+  if (nextActiveCalendar) {
+    activeCalendar = nextActiveCalendar;
+    calendarApi?.setActiveCalendar(nextActiveCalendar);
+  }
+
+  if (currentViewMode === VIEW_MODE_YEAR) {
+    renderYearView(activeCalendar, activeYearViewYear);
+  }
+};
+
+if (themeToggleButton) {
+  themeToggleApi = setupThemeToggle(themeToggleButton);
 }
 
 if (telegramLogToggleButton && telegramLogPanel) {
@@ -2334,7 +2424,7 @@ if (telegramLogFrame) {
 }
 
 if (headerCalendarsButton) {
-  setupCalendarSwitcher(headerCalendarsButton, {
+  calendarSwitcherApi = setupCalendarSwitcher(headerCalendarsButton, {
     onActiveCalendarChange: (calendar) => {
       activeCalendar = calendar;
       calendarApi?.setActiveCalendar(calendar);
@@ -2342,6 +2432,15 @@ if (headerCalendarsButton) {
         renderYearView(calendar, activeYearViewYear);
       }
     },
+  });
+}
+
+if (profileSwitcher && headerProfileButton && profileOptions) {
+  setupProfileSwitcher({
+    switcher: profileSwitcher,
+    button: headerProfileButton,
+    options: profileOptions,
+    onDriveStateImported: applyDriveImportedStateInPlace,
   });
 }
 

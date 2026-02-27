@@ -459,6 +459,8 @@ function toNestedCalendarDayEntries(flatDayEntries) {
 const ENTITY_ID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const ENTITY_ID_CHARSET_SIZE = ENTITY_ID_ALPHABET.length;
 const ENTITY_ID_RANDOM_TOKEN_LENGTH = 17;
+const ACCOUNT_ID_RANDOM_TOKEN_LENGTH = 22;
+const ACCOUNT_ID_PATTERN = /^[A-Za-z0-9]{12,48}$/;
 
 function createHighEntropyToken(length = ENTITY_ID_RANDOM_TOKEN_LENGTH) {
   const tokenLength = Number.isInteger(length) && length > 0 ? length : ENTITY_ID_RANDOM_TOKEN_LENGTH;
@@ -497,6 +499,35 @@ function generateEntityId(prefix, usedIds = null) {
   let nextId = "";
   do {
     nextId = `${prefix}_${createHighEntropyToken()}`;
+  } while (usedIds instanceof Set && usedIds.has(nextId));
+  if (usedIds instanceof Set) {
+    usedIds.add(nextId);
+  }
+  return nextId;
+}
+
+function normalizeIncomingAccountId(rawValue, { allowLegacyDefault = true } = {}) {
+  const candidateId = typeof rawValue === "string" ? rawValue.trim() : "";
+  if (!candidateId) {
+    return "";
+  }
+
+  if (!allowLegacyDefault && candidateId === "acc_default") {
+    return "";
+  }
+
+  // Accept both new account IDs (pure alphanumeric) and legacy acc_* IDs.
+  if (ACCOUNT_ID_PATTERN.test(candidateId)) {
+    return candidateId;
+  }
+
+  return normalizeIncomingEntityId(candidateId, "acc");
+}
+
+function generateAccountId(usedIds = null) {
+  let nextId = "";
+  do {
+    nextId = createHighEntropyToken(ACCOUNT_ID_RANDOM_TOKEN_LENGTH);
   } while (usedIds instanceof Set && usedIds.has(nextId));
   if (usedIds instanceof Set) {
     usedIds.add(nextId);
@@ -559,7 +590,8 @@ function buildJustCalendarBootstrapBundle(rawPayload = {}) {
   );
   const currentAccountName = requestedCurrentAccountName || DEFAULT_BOOTSTRAP_ACCOUNT_NAME;
   const currentAccountId =
-    normalizeIncomingEntityId(payloadObject.currentAccountId, "acc") || generateEntityId("acc");
+    normalizeIncomingAccountId(payloadObject.currentAccountId, { allowLegacyDefault: false }) ||
+    generateAccountId();
 
   const normalizedCalendars = normalizeBootstrapCalendars(payloadObject.calendars);
   const usedCalendarIds = new Set();
@@ -1311,7 +1343,7 @@ function extractBootstrapBundleFromPersistedConfig(rawConfigPayload) {
   );
 
   const rawAccounts = isObjectRecord(rawConfigPayload.accounts) ? rawConfigPayload.accounts : {};
-  let currentAccountId = normalizeIncomingEntityId(rawConfigPayload["current-account-id"], "acc");
+  let currentAccountId = normalizeIncomingAccountId(rawConfigPayload["current-account-id"]);
   let currentAccountRecord =
     currentAccountId && isObjectRecord(rawAccounts[currentAccountId])
       ? rawAccounts[currentAccountId]
@@ -1319,7 +1351,7 @@ function extractBootstrapBundleFromPersistedConfig(rawConfigPayload) {
 
   if (!currentAccountRecord) {
     for (const [rawAccountId, rawAccountRecord] of Object.entries(rawAccounts)) {
-      const normalizedAccountId = normalizeIncomingEntityId(rawAccountId, "acc");
+      const normalizedAccountId = normalizeIncomingAccountId(rawAccountId);
       if (!normalizedAccountId || !isObjectRecord(rawAccountRecord)) {
         continue;
       }
@@ -1745,22 +1777,30 @@ async function ensureJustCalendarConfigForCurrentConnection({
       }
 
       effectiveBootstrapBundle = extractBootstrapBundleFromPersistedConfig(readConfigResult.payload);
-      if (!effectiveBootstrapBundle) {
-        // Compatibility fallback: keep legacy/invalid config files from blocking
-        // data-file bootstrap. Frontend bootstrap payload provides stable IDs.
-        effectiveBootstrapBundle = requestedBootstrapBundle;
-      }
     }
 
-    const dataFilesResult = ensureDataFiles && effectiveBootstrapBundle
+    if (!effectiveBootstrapBundle) {
+      return {
+        ok: false,
+        error: "invalid_existing_config_payload",
+        status: 422,
+        details: {
+          message:
+            "Existing justcalendar.json is invalid or missing required current-account-id/account data.",
+        },
+      };
+    }
+
+    const shouldCreateMissingDataFiles = Boolean(
+      ensureDataFiles && configFileResult.created && effectiveBootstrapBundle,
+    );
+    const dataFilesResult = shouldCreateMissingDataFiles
       ? await ensureJustCalendarDataFiles({
           accessToken: tokenToUse,
           folderId,
           accountId: effectiveBootstrapBundle.accountId,
           calendars: effectiveBootstrapBundle.calendars,
-          requestedCalendars: configFileResult.created
-            ? requestedBootstrapBundle.calendars
-            : effectiveBootstrapBundle.calendars,
+          requestedCalendars: requestedBootstrapBundle.calendars,
         })
       : {
           ok: true,
@@ -1780,7 +1820,7 @@ async function ensureJustCalendarConfigForCurrentConnection({
       });
     }
 
-    const responseBundle = effectiveBootstrapBundle || requestedBootstrapBundle;
+    const responseBundle = effectiveBootstrapBundle;
     const responseCalendars = Array.isArray(responseBundle?.calendars)
       ? responseBundle.calendars.map((calendar) => ({
           id: calendar.id,

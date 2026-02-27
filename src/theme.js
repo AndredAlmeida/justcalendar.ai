@@ -108,10 +108,25 @@ export function setupThemeToggle(button) {
 
   const savedTheme = getStoredTheme();
   const initialTheme = normalizeTheme(savedTheme) || DEFAULT_THEME;
+  let currentTheme = initialTheme;
 
   applyTheme({ theme: initialTheme, root, themeColorMeta });
   syncThemeOptionState({ optionButtons, theme: initialTheme });
   setThemeSwitcherExpanded({ switcher, button, isExpanded: false });
+
+  const applyThemeSelection = (nextTheme, { persist = true } = {}) => {
+    const normalizedTheme = normalizeTheme(nextTheme);
+    if (!normalizedTheme) {
+      return false;
+    }
+    applyTheme({ theme: normalizedTheme, root, themeColorMeta });
+    syncThemeOptionState({ optionButtons, theme: normalizedTheme });
+    if (persist) {
+      setStoredTheme(normalizedTheme);
+    }
+    currentTheme = normalizedTheme;
+    return true;
+  };
 
   optionButtons.forEach((optionButton) => {
     optionButton.addEventListener("click", () => {
@@ -119,10 +134,7 @@ export function setupThemeToggle(button) {
       if (!SUPPORTED_THEMES.includes(nextTheme)) {
         return;
       }
-
-      applyTheme({ theme: nextTheme, root, themeColorMeta });
-      syncThemeOptionState({ optionButtons, theme: nextTheme });
-      setStoredTheme(nextTheme);
+      applyThemeSelection(nextTheme);
     });
   });
 
@@ -151,4 +163,17 @@ export function setupThemeToggle(button) {
     setThemeSwitcherExpanded({ switcher, button, isExpanded: false });
     button.focus();
   });
+
+  return {
+    applyTheme: (nextTheme, options = {}) => {
+      return applyThemeSelection(nextTheme, options);
+    },
+    syncFromStorage: () => {
+      const storedTheme = getStoredTheme();
+      const nextTheme = normalizeTheme(storedTheme) || DEFAULT_THEME;
+      applyThemeSelection(nextTheme, { persist: false });
+      return nextTheme;
+    },
+    getTheme: () => currentTheme,
+  };
 }

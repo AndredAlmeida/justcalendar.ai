@@ -1944,4 +1944,24 @@ export function setupCalendarSwitcher(button, { onActiveCalendarChange } = {}) {
     });
     button.focus();
   });
+
+  const syncFromStorage = ({ notify = true } = {}) => {
+    const nextState = loadCalendarsState();
+    calendars = nextState.calendars;
+    activeCalendarId = nextState.activeCalendarId;
+    setDeleteConfirmExpanded({ isExpanded: false });
+    resetAddEditor();
+    resetEditEditor();
+    syncCalendarUi();
+    if (notify) {
+      notifyActiveCalendarChange();
+    }
+    return resolveActiveCalendar();
+  };
+
+  return {
+    syncFromStorage,
+    getActiveCalendar: () => resolveActiveCalendar(),
+    setActiveCalendarId,
+  };
 }
