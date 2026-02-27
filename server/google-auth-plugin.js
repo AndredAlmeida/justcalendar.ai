@@ -2066,6 +2066,200 @@ async function saveJustCalendarStateForCurrentConnection({
   };
 }
 
+async function saveCurrentCalendarStateForCurrentConnection({
+  accessToken = "",
+  config,
+  bootstrapBundle = null,
+} = {}) {
+  const storedState = readStoredAuthState();
+  if (!hasGoogleScope(storedState.scope, GOOGLE_DRIVE_FILE_SCOPE)) {
+    return {
+      ok: false,
+      error: "missing_drive_scope",
+      status: 403,
+      details: {
+        message:
+          "Current Google token does not include drive.file scope. Reconnect and approve Google Drive access.",
+      },
+    };
+  }
+
+  const requestedBootstrapBundle =
+    bootstrapBundle &&
+    typeof bootstrapBundle === "object" &&
+    !Array.isArray(bootstrapBundle) &&
+    isObjectRecord(bootstrapBundle.configPayload)
+      ? bootstrapBundle
+      : buildJustCalendarBootstrapBundle({});
+
+  const currentCalendarId = normalizeIncomingEntityId(
+    requestedBootstrapBundle.currentCalendarId,
+    "cal",
+  );
+  if (!currentCalendarId) {
+    return {
+      ok: false,
+      error: "missing_current_calendar_id",
+      status: 400,
+      details: {
+        message: "Current calendar id is required to save a single calendar.",
+      },
+    };
+  }
+
+  const requestedCalendar = Array.isArray(requestedBootstrapBundle.calendars)
+    ? requestedBootstrapBundle.calendars.find(
+        (calendar) =>
+          isObjectRecord(calendar) &&
+          normalizeIncomingEntityId(calendar.id, "cal") === currentCalendarId,
+      )
+    : null;
+  if (!requestedCalendar) {
+    return {
+      ok: false,
+      error: "current_calendar_not_found_in_request",
+      status: 400,
+      details: {
+        message: "Current calendar was not found in payload calendars.",
+      },
+    };
+  }
+
+  const loadResult = await loadJustCalendarStateForCurrentConnection({
+    accessToken,
+    config,
+  });
+  if (!loadResult.ok) {
+    return loadResult;
+  }
+  if (loadResult.missing) {
+    return {
+      ok: false,
+      error: "missing_config",
+      status: 404,
+      details: {
+        message: "justcalendar.json was not found in Google Drive.",
+      },
+    };
+  }
+
+  const persistedCalendar = Array.isArray(loadResult.calendars)
+    ? loadResult.calendars.find(
+        (calendar) =>
+          isObjectRecord(calendar) &&
+          normalizeIncomingEntityId(calendar.id, "cal") === currentCalendarId,
+      )
+    : null;
+  if (!persistedCalendar) {
+    return {
+      ok: false,
+      error: "current_calendar_not_found_in_config",
+      status: 404,
+      details: {
+        message: "Current calendar id was not found in justcalendar.json.",
+      },
+    };
+  }
+
+  const fileName =
+    typeof persistedCalendar["data-file"] === "string" ? persistedCalendar["data-file"].trim() : "";
+  if (!fileName) {
+    return {
+      ok: false,
+      error: "missing_current_calendar_data_file",
+      status: 422,
+      details: {
+        message: "Current calendar is missing a data-file in justcalendar.json.",
+      },
+    };
+  }
+
+  const folderId = typeof loadResult.folderId === "string" ? loadResult.folderId.trim() : "";
+  if (!folderId) {
+    return {
+      ok: false,
+      error: "missing_folder_id",
+    };
+  }
+
+  const accountId = typeof loadResult.accountId === "string" ? loadResult.accountId.trim() : "";
+  if (!accountId) {
+    return {
+      ok: false,
+      error: "missing_account_id_in_config",
+      status: 422,
+      details: {
+        message: "Persisted justcalendar.json is missing current-account-id.",
+      },
+    };
+  }
+  const currentCalendarType = normalizeBootstrapCalendarType(
+    persistedCalendar.type || requestedCalendar.type,
+  );
+
+  const upsertDataFileResult = await upsertDriveJsonFileInFolder({
+    accessToken,
+    folderId,
+    fileName,
+    payload: buildCalendarDataFilePayload({
+      accountId,
+      calendar: {
+        id: currentCalendarId,
+        name: normalizeBootstrapCalendarName(
+          persistedCalendar.name,
+          normalizeBootstrapCalendarName(requestedCalendar.name, "Calendar"),
+        ),
+        type: currentCalendarType,
+      },
+      dayEntries: requestedCalendar.data,
+    }),
+  });
+  if (!upsertDataFileResult.ok) {
+    return {
+      ok: false,
+      error: "current_calendar_data_upsert_failed",
+      status: upsertDataFileResult.status || 502,
+      details: {
+        fileName,
+        cause: upsertDataFileResult.details || upsertDataFileResult.error || "unknown_error",
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    folderId,
+    fileId: upsertDataFileResult.fileId || "",
+    dataFile: fileName,
+    created: Boolean(upsertDataFileResult.created),
+    accountId,
+    account: loadResult.account || DEFAULT_BOOTSTRAP_ACCOUNT_NAME,
+    currentCalendarId,
+    calendar: {
+      id: currentCalendarId,
+      name: normalizeBootstrapCalendarName(
+        persistedCalendar.name,
+        normalizeBootstrapCalendarName(requestedCalendar.name, "Calendar"),
+      ),
+      type: currentCalendarType,
+      color: normalizeBootstrapCalendarColor(
+        persistedCalendar.color || requestedCalendar.color,
+      ),
+      pinned: normalizeBootstrapCalendarPinned(
+        persistedCalendar.pinned ?? requestedCalendar.pinned,
+      ),
+      ...(currentCalendarType === CALENDAR_TYPE_SCORE
+        ? {
+            display: normalizeBootstrapScoreDisplay(
+              persistedCalendar.display || requestedCalendar.display,
+            ),
+          }
+        : {}),
+      "data-file": fileName,
+    },
+  };
+}
+
 async function loadJustCalendarStateForCurrentConnection({ accessToken = "", config } = {}) {
   const storedState = readStoredAuthState();
   if (!hasGoogleScope(storedState.scope, GOOGLE_DRIVE_FILE_SCOPE)) {
@@ -3035,6 +3229,76 @@ function createGoogleAuthPlugin(config) {
     });
   };
 
+  const handleSaveCurrentCalendarState = async (req, res) => {
+    if (!ensureGoogleOAuthConfigured(googleConfig, res)) {
+      return;
+    }
+
+    let saveRequestPayload = {};
+    try {
+      saveRequestPayload = await readJsonRequestBody(req);
+    } catch (error) {
+      jsonResponse(res, 400, {
+        ok: false,
+        error: "invalid_save_payload",
+        details: error instanceof Error ? error.message : "unknown_error",
+      });
+      return;
+    }
+
+    const tokenStateResult = await ensureValidAccessToken({ config: googleConfig });
+    if (!tokenStateResult.ok) {
+      jsonResponse(res, tokenStateResult.status, {
+        ok: false,
+        ...(tokenStateResult.payload || {
+          error: "not_connected",
+          message: "Google Drive is not connected.",
+        }),
+      });
+      return;
+    }
+
+    const stateWithToken = tokenStateResult.state;
+    if (!hasGoogleScope(stateWithToken.scope, GOOGLE_DRIVE_FILE_SCOPE)) {
+      jsonResponse(res, 403, {
+        ok: false,
+        error: "missing_drive_scope",
+        details: {
+          message:
+            "Current Google token does not include drive.file scope. Reconnect and approve Google Drive access.",
+        },
+      });
+      return;
+    }
+
+    const bootstrapBundle = buildJustCalendarBootstrapBundle(saveRequestPayload);
+    const saveResult = await saveCurrentCalendarStateForCurrentConnection({
+      accessToken: stateWithToken.accessToken,
+      config: googleConfig,
+      bootstrapBundle,
+    });
+    if (!saveResult.ok) {
+      jsonResponse(res, Number(saveResult.status) || 502, {
+        ok: false,
+        error: saveResult.error || "save_current_calendar_failed",
+        details: saveResult.details || null,
+      });
+      return;
+    }
+
+    jsonResponse(res, 200, {
+      ok: true,
+      created: Boolean(saveResult.created),
+      folderId: saveResult.folderId || "",
+      fileId: saveResult.fileId || "",
+      fileName: saveResult.dataFile || "",
+      accountId: saveResult.accountId || bootstrapBundle.accountId || "",
+      account: saveResult.account || bootstrapBundle.accountName || DEFAULT_BOOTSTRAP_ACCOUNT_NAME,
+      currentCalendarId: saveResult.currentCalendarId || bootstrapBundle.currentCalendarId || "",
+      calendar: isObjectRecord(saveResult.calendar) ? saveResult.calendar : null,
+    });
+  };
+
   const handleLoadState = async (res) => {
     if (!ensureGoogleOAuthConfigured(googleConfig, res)) {
       return;
@@ -3169,6 +3433,15 @@ function createGoogleAuthPlugin(config) {
             return;
           }
           await handleSaveState(req, res);
+          return;
+        }
+
+        if (requestUrl.pathname === "/api/auth/google/save-current-calendar-state") {
+          if (req.method !== "POST") {
+            methodNotAllowed(res);
+            return;
+          }
+          await handleSaveCurrentCalendarState(req, res);
           return;
         }
 

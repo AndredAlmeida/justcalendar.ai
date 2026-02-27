@@ -1959,7 +1959,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
         if (!isGoogleDriveConfigured) {
           logGoogleAuthMessage(
             "warn",
-            "Save cannot run because Google Drive OAuth is not configured.",
+            "Save All cannot run because Google Drive OAuth is not configured.",
           );
           setExpanded(false);
           return;
@@ -1968,7 +1968,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
         if (!isGoogleDriveConnected) {
           logGoogleAuthMessage(
             "warn",
-            "Save cannot run because Google Drive is not connected.",
+            "Save All cannot run because Google Drive is not connected.",
           );
           setExpanded(false);
           return;
@@ -1989,7 +1989,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
           });
           const payload = await readResponsePayload(response);
           if (!response.ok || !payload?.ok) {
-            logGoogleAuthMessage("error", "Save failed while writing state to Google Drive.", {
+            logGoogleAuthMessage("error", "Save All failed while writing state to Google Drive.", {
               status: response.status,
               statusText: response.statusText,
               payload,
@@ -1998,12 +1998,77 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
             syncStoredDriveAccountIdFromPayload(payload);
             logGoogleAuthMessage(
               "info",
-              "Saved current calendar state to Google Drive.",
+              "Saved full app state to Google Drive.",
               payload,
             );
           }
         } catch (error) {
-          logGoogleAuthMessage("error", "Save request failed.", {
+          logGoogleAuthMessage("error", "Save All request failed.", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        } finally {
+          if (optionButton instanceof HTMLButtonElement) {
+            optionButton.disabled = false;
+          }
+          setDriveBusy(false);
+          await refreshGoogleDriveStatus();
+        }
+        setExpanded(false);
+        return;
+      }
+
+      if (actionType === "save-calendar") {
+        event.preventDefault();
+        await refreshGoogleDriveStatus();
+
+        if (!isGoogleDriveConfigured) {
+          logGoogleAuthMessage(
+            "warn",
+            "Save Calendar cannot run because Google Drive OAuth is not configured.",
+          );
+          setExpanded(false);
+          return;
+        }
+
+        if (!isGoogleDriveConnected) {
+          logGoogleAuthMessage(
+            "warn",
+            "Save Calendar cannot run because Google Drive is not connected.",
+          );
+          setExpanded(false);
+          return;
+        }
+
+        if (optionButton instanceof HTMLButtonElement) {
+          optionButton.disabled = true;
+        }
+        setDriveBusy(true);
+
+        try {
+          const response = await fetch("/api/auth/google/save-current-calendar-state", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(buildDriveBootstrapPayload()),
+          });
+          const payload = await readResponsePayload(response);
+          if (!response.ok || !payload?.ok) {
+            logGoogleAuthMessage("error", "Save Calendar failed while writing to Google Drive.", {
+              status: response.status,
+              statusText: response.statusText,
+              payload,
+            });
+          } else {
+            syncStoredDriveAccountIdFromPayload(payload);
+            logGoogleAuthMessage(
+              "info",
+              "Saved current calendar data to Google Drive.",
+              payload,
+            );
+          }
+        } catch (error) {
+          logGoogleAuthMessage("error", "Save Calendar request failed.", {
             error: error instanceof Error ? error.message : String(error),
           });
         } finally {
