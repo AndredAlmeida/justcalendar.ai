@@ -460,7 +460,9 @@ const ENTITY_ID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP
 const ENTITY_ID_CHARSET_SIZE = ENTITY_ID_ALPHABET.length;
 const ENTITY_ID_RANDOM_TOKEN_LENGTH = 17;
 const ACCOUNT_ID_RANDOM_TOKEN_LENGTH = 22;
+const CALENDAR_ID_RANDOM_TOKEN_LENGTH = 22;
 const ACCOUNT_ID_PATTERN = /^[A-Za-z0-9]{12,48}$/;
+const CALENDAR_ID_PATTERN = /^[A-Za-z0-9]{12,48}$/;
 
 function createHighEntropyToken(length = ENTITY_ID_RANDOM_TOKEN_LENGTH) {
   const tokenLength = Number.isInteger(length) && length > 0 ? length : ENTITY_ID_RANDOM_TOKEN_LENGTH;
@@ -524,10 +526,35 @@ function normalizeIncomingAccountId(rawValue, { allowLegacyDefault = true } = {}
   return normalizeIncomingEntityId(candidateId, "acc");
 }
 
+function normalizeIncomingCalendarId(rawValue) {
+  const candidateId = typeof rawValue === "string" ? rawValue.trim() : "";
+  if (!candidateId) {
+    return "";
+  }
+
+  // Accept both new calendar IDs (pure alphanumeric) and legacy cal_* IDs.
+  if (CALENDAR_ID_PATTERN.test(candidateId)) {
+    return candidateId;
+  }
+
+  return normalizeIncomingEntityId(candidateId, "cal");
+}
+
 function generateAccountId(usedIds = null) {
   let nextId = "";
   do {
     nextId = createHighEntropyToken(ACCOUNT_ID_RANDOM_TOKEN_LENGTH);
+  } while (usedIds instanceof Set && usedIds.has(nextId));
+  if (usedIds instanceof Set) {
+    usedIds.add(nextId);
+  }
+  return nextId;
+}
+
+function generateCalendarId(usedIds = null) {
+  let nextId = "";
+  do {
+    nextId = createHighEntropyToken(CALENDAR_ID_RANDOM_TOKEN_LENGTH);
   } while (usedIds instanceof Set && usedIds.has(nextId));
   if (usedIds instanceof Set) {
     usedIds.add(nextId);
@@ -552,7 +579,7 @@ function normalizeBootstrapCalendars(rawCalendars) {
           ? normalizeBootstrapScoreDisplay(rawCalendar.display)
           : undefined;
       return {
-        id: normalizeIncomingEntityId(rawCalendar.id, "cal"),
+        id: normalizeIncomingCalendarId(rawCalendar.id),
         name: normalizeBootstrapCalendarName(rawCalendar.name, fallbackName),
         type: calendarType,
         color: calendarColor,
@@ -584,10 +611,7 @@ function buildJustCalendarBootstrapBundle(rawPayload = {}) {
   const selectedTheme = normalizeBootstrapTheme(
     payloadObject.selectedTheme || payloadObject["selected-theme"],
   );
-  const requestedCurrentCalendarId = normalizeIncomingEntityId(
-    payloadObject.currentCalendarId,
-    "cal",
-  );
+  const requestedCurrentCalendarId = normalizeIncomingCalendarId(payloadObject.currentCalendarId);
   const currentAccountName = requestedCurrentAccountName || DEFAULT_BOOTSTRAP_ACCOUNT_NAME;
   const currentAccountId =
     normalizeIncomingAccountId(payloadObject.currentAccountId, { allowLegacyDefault: false }) ||
@@ -596,11 +620,11 @@ function buildJustCalendarBootstrapBundle(rawPayload = {}) {
   const normalizedCalendars = normalizeBootstrapCalendars(payloadObject.calendars);
   const usedCalendarIds = new Set();
   const accountCalendars = normalizedCalendars.map((calendar) => {
-    const requestedCalendarId = normalizeIncomingEntityId(calendar.id, "cal");
+    const requestedCalendarId = normalizeIncomingCalendarId(calendar.id);
     const calendarId =
       requestedCalendarId && !usedCalendarIds.has(requestedCalendarId)
         ? requestedCalendarId
-        : generateEntityId("cal", usedCalendarIds);
+        : generateCalendarId(usedCalendarIds);
     usedCalendarIds.add(calendarId);
     const dataFile = `${currentAccountId}_${calendarId}.json`;
 
@@ -1379,7 +1403,7 @@ function extractBootstrapBundleFromPersistedConfig(rawConfigPayload) {
         return null;
       }
 
-      const calendarId = normalizeIncomingEntityId(rawCalendar.id, "cal");
+      const calendarId = normalizeIncomingCalendarId(rawCalendar.id);
       if (!calendarId || usedCalendarIds.has(calendarId)) {
         return null;
       }
@@ -1410,8 +1434,8 @@ function extractBootstrapBundleFromPersistedConfig(rawConfigPayload) {
     .filter(Boolean);
 
   const requestedCurrentCalendarId =
-    normalizeIncomingEntityId(rawConfigPayload["current-calendar-id"], "cal") ||
-    normalizeIncomingEntityId(currentAccountRecord["current-calendar-id"], "cal");
+    normalizeIncomingCalendarId(rawConfigPayload["current-calendar-id"]) ||
+    normalizeIncomingCalendarId(currentAccountRecord["current-calendar-id"]);
   const currentCalendarId =
     requestedCurrentCalendarId && calendars.some((calendar) => calendar.id === requestedCurrentCalendarId)
       ? requestedCurrentCalendarId
@@ -1448,7 +1472,7 @@ function buildCalendarDataLookupMaps(calendars = []) {
       normalizedCalendarType,
     );
 
-    const calendarId = normalizeIncomingEntityId(calendar.id, "cal");
+    const calendarId = normalizeIncomingCalendarId(calendar.id);
     if (calendarId) {
       calendarDataById.set(calendarId, normalizedDayEntries);
     }
@@ -1597,7 +1621,7 @@ async function loadJustCalendarDataFiles({
     if (!isObjectRecord(calendar)) {
       continue;
     }
-    const calendarId = normalizeIncomingEntityId(calendar.id, "cal");
+    const calendarId = normalizeIncomingCalendarId(calendar.id);
     if (!calendarId) {
       continue;
     }
@@ -1859,10 +1883,7 @@ async function ensureJustCalendarConfigForCurrentConnection({
       Array.isArray(responseCalendars) && responseCalendars.length > 0
         ? responseCalendars[0].id || ""
         : "";
-    const requestedCurrentCalendarId = normalizeIncomingEntityId(
-      responseBundle?.currentCalendarId,
-      "cal",
-    );
+    const requestedCurrentCalendarId = normalizeIncomingCalendarId(responseBundle?.currentCalendarId);
     const selectedTheme = normalizeBootstrapTheme(responseBundle?.selectedTheme);
     const activeCalendarId =
       requestedCurrentCalendarId &&
@@ -2024,9 +2045,8 @@ async function saveJustCalendarStateForCurrentConnection({
     "data-file": calendar.dataFile,
   }));
   const firstCalendarId = responseCalendars.length > 0 ? responseCalendars[0].id || "" : "";
-  const requestedCurrentCalendarId = normalizeIncomingEntityId(
+  const requestedCurrentCalendarId = normalizeIncomingCalendarId(
     requestedBootstrapBundle.currentCalendarId,
-    "cal",
   );
   const selectedTheme = normalizeBootstrapTheme(requestedBootstrapBundle.selectedTheme);
   const activeCalendarId =
@@ -2092,10 +2112,7 @@ async function saveCurrentCalendarStateForCurrentConnection({
       ? bootstrapBundle
       : buildJustCalendarBootstrapBundle({});
 
-  const currentCalendarId = normalizeIncomingEntityId(
-    requestedBootstrapBundle.currentCalendarId,
-    "cal",
-  );
+  const currentCalendarId = normalizeIncomingCalendarId(requestedBootstrapBundle.currentCalendarId);
   if (!currentCalendarId) {
     return {
       ok: false,
@@ -2111,7 +2128,7 @@ async function saveCurrentCalendarStateForCurrentConnection({
     ? requestedBootstrapBundle.calendars.find(
         (calendar) =>
           isObjectRecord(calendar) &&
-          normalizeIncomingEntityId(calendar.id, "cal") === currentCalendarId,
+          normalizeIncomingCalendarId(calendar.id) === currentCalendarId,
       )
     : null;
   if (!requestedCalendar) {
@@ -2147,7 +2164,7 @@ async function saveCurrentCalendarStateForCurrentConnection({
     ? loadResult.calendars.find(
         (calendar) =>
           isObjectRecord(calendar) &&
-          normalizeIncomingEntityId(calendar.id, "cal") === currentCalendarId,
+          normalizeIncomingCalendarId(calendar.id) === currentCalendarId,
       )
     : null;
   if (!persistedCalendar) {
@@ -2363,9 +2380,8 @@ async function loadJustCalendarStateForCurrentConnection({ accessToken = "", con
   }
 
   const firstCalendarId = responseCalendars.length > 0 ? responseCalendars[0].id || "" : "";
-  const requestedCurrentCalendarId = normalizeIncomingEntityId(
+  const requestedCurrentCalendarId = normalizeIncomingCalendarId(
     extractedBootstrapBundle.currentCalendarId,
-    "cal",
   );
   const selectedTheme = normalizeBootstrapTheme(extractedBootstrapBundle.selectedTheme);
   const activeCalendarId =

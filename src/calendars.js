@@ -18,6 +18,9 @@ const MAX_PINNED_CALENDARS = 5;
 const MOBILE_PIN_DISABLED_QUERY = "(max-width: 640px)";
 const CALENDAR_BUTTON_LABEL = "Open calendars";
 const CALENDAR_CLOSE_LABEL = "Close calendars";
+const CALENDAR_ID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const CALENDAR_ID_CHARSET_SIZE = CALENDAR_ID_ALPHABET.length;
+const CALENDAR_ID_LENGTH = 22;
 const CALENDAR_COLOR_HEX_BY_KEY = Object.freeze({
   green: "#22c55e",
   red: "#ef4444",
@@ -238,22 +241,41 @@ function resolveCalendarColorHex(colorKey, fallbackColor = DEFAULT_CALENDAR_COLO
   return CALENDAR_COLOR_HEX_BY_KEY[normalizedColor];
 }
 
-function slugifyCalendarName(name) {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
+function generateHighEntropyCalendarId(length = CALENDAR_ID_LENGTH) {
+  const tokenLength = Number.isInteger(length) && length > 0 ? length : CALENDAR_ID_LENGTH;
+  const randomSource =
+    typeof crypto !== "undefined" && crypto && typeof crypto.getRandomValues === "function"
+      ? crypto
+      : null;
+  let nextId = "";
+  while (nextId.length < tokenLength) {
+    const randomChunk = new Uint8Array(Math.max(tokenLength * 2, 16));
+    if (randomSource) {
+      randomSource.getRandomValues(randomChunk);
+    } else {
+      for (let index = 0; index < randomChunk.length; index += 1) {
+        randomChunk[index] = Math.floor(Math.random() * 256);
+      }
+    }
+
+    for (const rawByte of randomChunk) {
+      if (rawByte >= 248) {
+        continue;
+      }
+      nextId += CALENDAR_ID_ALPHABET[rawByte % CALENDAR_ID_CHARSET_SIZE];
+      if (nextId.length >= tokenLength) {
+        break;
+      }
+    }
+  }
+  return nextId;
 }
 
-function createUniqueCalendarId(name, usedIds) {
-  const baseId = slugifyCalendarName(name) || "calendar";
-  let candidateId = baseId;
-  let suffix = 2;
-  while (usedIds.has(candidateId)) {
-    candidateId = `${baseId}-${suffix}`;
-    suffix += 1;
-  }
+function createUniqueCalendarId(_name, usedIds) {
+  let candidateId = "";
+  do {
+    candidateId = generateHighEntropyCalendarId();
+  } while (usedIds.has(candidateId));
   return candidateId;
 }
 

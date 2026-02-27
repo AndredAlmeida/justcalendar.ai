@@ -33,6 +33,7 @@ const CALENDAR_DAY_STATES_STORAGE_KEY = "justcal-calendar-day-states";
 const LEGACY_DAY_STATE_STORAGE_KEY = "justcal-day-states";
 const THEME_STORAGE_KEY = "justcal-theme";
 const DRIVE_ACCOUNT_ID_STORAGE_KEY = "justcal-drive-account-id";
+const DRIVE_CALENDAR_ID_MAP_STORAGE_KEY = "justcal-drive-calendar-id-map";
 const DEFAULT_THEME = "tokyo-night-storm";
 const DEFAULT_CALENDAR_ID = "energy-tracker";
 const DEFAULT_CALENDAR_COLOR = "blue";
@@ -93,6 +94,7 @@ const DRIVE_ACCOUNT_ID_CHARSET_SIZE = DRIVE_ACCOUNT_ID_ALPHABET.length;
 const DRIVE_ACCOUNT_ID_LENGTH = 22;
 const DRIVE_ACCOUNT_ID_PATTERN = /^[A-Za-z0-9]{12,48}$/;
 const LEGACY_DRIVE_ACCOUNT_ID_PATTERN = /^acc_[A-Za-z0-9][A-Za-z0-9_-]{5,63}$/;
+const LEGACY_DRIVE_CALENDAR_ID_PATTERN = /^cal_[A-Za-z0-9][A-Za-z0-9_-]{5,63}$/;
 
 const MIN_FADE_DELTA = 0;
 const MAX_FADE_DELTA = 100;
@@ -112,12 +114,31 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function normalizeCanonicalDriveId(rawValue) {
+  const candidateId = typeof rawValue === "string" ? rawValue.trim() : "";
+  if (!candidateId) {
+    return "";
+  }
+  return DRIVE_ACCOUNT_ID_PATTERN.test(candidateId) ? candidateId : "";
+}
+
 function isValidDriveAccountId(rawValue) {
   const candidateId = typeof rawValue === "string" ? rawValue.trim() : "";
   if (!candidateId || candidateId === "acc_default") {
     return false;
   }
   return DRIVE_ACCOUNT_ID_PATTERN.test(candidateId) || LEGACY_DRIVE_ACCOUNT_ID_PATTERN.test(candidateId);
+}
+
+function isValidDriveCalendarId(rawValue, { allowLegacy = true } = {}) {
+  const candidateId = typeof rawValue === "string" ? rawValue.trim() : "";
+  if (!candidateId) {
+    return false;
+  }
+  if (normalizeCanonicalDriveId(candidateId)) {
+    return true;
+  }
+  return allowLegacy ? LEGACY_DRIVE_CALENDAR_ID_PATTERN.test(candidateId) : false;
 }
 
 function generateDriveAccountId(length = DRIVE_ACCOUNT_ID_LENGTH) {
@@ -185,6 +206,115 @@ function getOrCreateDriveAccountId() {
     return generatedAccountId;
   }
   return generatedAccountId;
+}
+
+function readStoredDriveCalendarIdMap() {
+  try {
+    const rawStoredMap = localStorage.getItem(DRIVE_CALENDAR_ID_MAP_STORAGE_KEY);
+    if (!rawStoredMap) {
+      return {};
+    }
+    const parsedMap = JSON.parse(rawStoredMap);
+    if (!parsedMap || typeof parsedMap !== "object" || Array.isArray(parsedMap)) {
+      return {};
+    }
+
+    return Object.entries(parsedMap).reduce((nextValue, [rawKey, rawId]) => {
+      const localCalendarId = String(rawKey ?? "").trim();
+      const canonicalDriveId = normalizeCanonicalDriveId(rawId);
+      if (!localCalendarId || !canonicalDriveId) {
+        return nextValue;
+      }
+      nextValue[localCalendarId] = canonicalDriveId;
+      return nextValue;
+    }, {});
+  } catch {
+    return {};
+  }
+}
+
+function persistDriveCalendarIdMap(idMap) {
+  if (!idMap || typeof idMap !== "object" || Array.isArray(idMap)) {
+    return false;
+  }
+
+  const normalizedMap = Object.entries(idMap).reduce((nextValue, [rawKey, rawId]) => {
+    const localCalendarId = String(rawKey ?? "").trim();
+    const canonicalDriveId = normalizeCanonicalDriveId(rawId);
+    if (!localCalendarId || !canonicalDriveId) {
+      return nextValue;
+    }
+    nextValue[localCalendarId] = canonicalDriveId;
+    return nextValue;
+  }, {});
+
+  try {
+    localStorage.setItem(DRIVE_CALENDAR_ID_MAP_STORAGE_KEY, JSON.stringify(normalizedMap));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function generateDriveCalendarId(length = DRIVE_ACCOUNT_ID_LENGTH) {
+  return generateDriveAccountId(length);
+}
+
+function getOrCreateDriveCalendarId(localCalendarId, usedIds = null) {
+  const localKey = String(localCalendarId ?? "").trim();
+  const idMap = readStoredDriveCalendarIdMap();
+
+  const existingMappedId = localKey ? normalizeCanonicalDriveId(idMap[localKey]) : "";
+  if (existingMappedId && !(usedIds instanceof Set && usedIds.has(existingMappedId))) {
+    if (usedIds instanceof Set) {
+      usedIds.add(existingMappedId);
+    }
+    return existingMappedId;
+  }
+
+  const reservedIds = new Set(Object.values(idMap).map((rawId) => normalizeCanonicalDriveId(rawId)).filter(Boolean));
+  if (usedIds instanceof Set) {
+    usedIds.forEach((existingId) => {
+      const canonicalId = normalizeCanonicalDriveId(existingId);
+      if (canonicalId) {
+        reservedIds.add(canonicalId);
+      }
+    });
+  }
+
+  let nextDriveId = "";
+  do {
+    nextDriveId = generateDriveCalendarId();
+  } while (reservedIds.has(nextDriveId));
+
+  if (localKey) {
+    idMap[localKey] = nextDriveId;
+    persistDriveCalendarIdMap(idMap);
+  }
+  if (usedIds instanceof Set) {
+    usedIds.add(nextDriveId);
+  }
+  return nextDriveId;
+}
+
+function resolveDriveCalendarId({ localCalendarId, rawCalendarId, usedIds = null } = {}) {
+  const canonicalCalendarId = normalizeCanonicalDriveId(rawCalendarId);
+  if (canonicalCalendarId && !(usedIds instanceof Set && usedIds.has(canonicalCalendarId))) {
+    if (usedIds instanceof Set) {
+      usedIds.add(canonicalCalendarId);
+    }
+    const localKey = String(localCalendarId ?? "").trim();
+    if (localKey) {
+      const idMap = readStoredDriveCalendarIdMap();
+      if (idMap[localKey] !== canonicalCalendarId) {
+        idMap[localKey] = canonicalCalendarId;
+        persistDriveCalendarIdMap(idMap);
+      }
+    }
+    return canonicalCalendarId;
+  }
+
+  return getOrCreateDriveCalendarId(localCalendarId, usedIds);
 }
 
 function mixRgb(baseColor, targetColor, amount) {
@@ -1122,6 +1252,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
   const driveBusyOverlay = document.getElementById("drive-busy-overlay");
   const GOOGLE_CONNECTED_COOKIE_NAME = "justcal_google_connected";
   const GOOGLE_AUTH_LOG_PREFIX = "[JustCalendar][GoogleDriveAuth]";
+  const BACKEND_CALL_LOG_PREFIX = "[JustCalendar][BackendCall]";
   const GOOGLE_DRIVE_FILES_API_URL = "https://www.googleapis.com/drive/v3/files";
   const GOOGLE_DRIVE_UPLOAD_API_URL = "https://www.googleapis.com/upload/drive/v3/files";
   const GOOGLE_DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
@@ -1180,6 +1311,89 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
       }
     } catch {
       return null;
+    }
+  };
+
+  const isBackendRequestTarget = (input) => {
+    if (typeof input === "string") {
+      return input.startsWith("/api/");
+    }
+    if (input instanceof URL) {
+      return input.origin === window.location.origin && input.pathname.startsWith("/api/");
+    }
+    if (input instanceof Request) {
+      try {
+        const requestUrl = new URL(input.url, window.location.origin);
+        return requestUrl.origin === window.location.origin && requestUrl.pathname.startsWith("/api/");
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  };
+
+  const toBackendRequestLabel = (input) => {
+    if (typeof input === "string") {
+      return input;
+    }
+    if (input instanceof URL) {
+      return `${input.pathname}${input.search}`;
+    }
+    if (input instanceof Request) {
+      try {
+        const requestUrl = new URL(input.url, window.location.origin);
+        return `${requestUrl.pathname}${requestUrl.search}`;
+      } catch {
+        return input.url || "<unknown>";
+      }
+    }
+    return "<unknown>";
+  };
+
+  const backendFetch = async (input, init = undefined) => {
+    const shouldLog = isBackendRequestTarget(input);
+    const method =
+      (init && typeof init.method === "string" && init.method.trim()) ||
+      (input instanceof Request && typeof input.method === "string" && input.method.trim()) ||
+      "GET";
+    const targetLabel = toBackendRequestLabel(input);
+    const startedAt =
+      typeof performance !== "undefined" && performance && typeof performance.now === "function"
+        ? performance.now()
+        : Date.now();
+
+    if (shouldLog) {
+      console.info(`${BACKEND_CALL_LOG_PREFIX} -> ${method.toUpperCase()} ${targetLabel}`);
+    }
+
+    try {
+      const response = await fetch(input, init);
+      if (shouldLog) {
+        const endedAt =
+          typeof performance !== "undefined" && performance && typeof performance.now === "function"
+            ? performance.now()
+            : Date.now();
+        const durationMs = Math.max(0, Math.round(endedAt - startedAt));
+        console.info(
+          `${BACKEND_CALL_LOG_PREFIX} <- ${method.toUpperCase()} ${targetLabel} ${response.status} (${durationMs}ms)`,
+        );
+      }
+      return response;
+    } catch (error) {
+      if (shouldLog) {
+        const endedAt =
+          typeof performance !== "undefined" && performance && typeof performance.now === "function"
+            ? performance.now()
+            : Date.now();
+        const durationMs = Math.max(0, Math.round(endedAt - startedAt));
+        console.error(
+          `${BACKEND_CALL_LOG_PREFIX} xx ${method.toUpperCase()} ${targetLabel} (${durationMs}ms)`,
+          {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+      }
+      throw error;
     }
   };
 
@@ -1263,19 +1477,6 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
     return CALENDAR_TYPE_SIGNAL;
   };
 
-  const toDriveEntityId = (prefix, rawValue, fallbackToken) => {
-    const normalizedToken = String(rawValue ?? fallbackToken ?? "")
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]+/g, "_")
-      .replace(/^_+|_+$/g, "")
-      .slice(0, 63);
-    if (!normalizedToken) {
-      return "";
-    }
-    return `${prefix}_${normalizedToken}`;
-  };
-
   const normalizeBootstrapCalendarDayEntries = (rawDayEntries) => {
     if (!isObjectLike(rawDayEntries)) {
       return {};
@@ -1353,7 +1554,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
   const buildDriveBootstrapPayload = () => {
     const fallbackCalendars = [
       {
-        id: "cal_sleep_score",
+        id: "sleep-score",
         name: "Sleep Score",
         type: CALENDAR_TYPE_SCORE,
         color: "blue",
@@ -1362,7 +1563,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
         data: {},
       },
       {
-        id: "cal_took_pills",
+        id: "took-pills",
         name: "Took Pills",
         type: CALENDAR_TYPE_CHECK,
         color: "green",
@@ -1370,7 +1571,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
         data: {},
       },
       {
-        id: "cal_energy_tracker",
+        id: "energy-tracker",
         name: "Energy Tracker",
         type: CALENDAR_TYPE_SIGNAL,
         color: "red",
@@ -1378,7 +1579,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
         data: {},
       },
       {
-        id: "cal_todos",
+        id: "todos",
         name: "TODOs",
         type: CALENDAR_TYPE_NOTES,
         color: "orange",
@@ -1386,7 +1587,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
         data: {},
       },
       {
-        id: "cal_workout_intensity",
+        id: "workout-intensity",
         name: "Workout Intensity",
         type: CALENDAR_TYPE_SCORE,
         color: "red",
@@ -1397,25 +1598,13 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
     ];
 
     const currentAccountId = getOrCreateDriveAccountId();
-
-    try {
-      const rawStoredCalendarsState = localStorage.getItem(CALENDARS_STORAGE_KEY);
-      const storedDayStatesByCalendarId = readBootstrapCalendarDayStates();
-      if (!rawStoredCalendarsState) {
-        return {
-          currentAccount: "default",
-          currentAccountId,
-          currentCalendarId: fallbackCalendars[0]?.id || "",
-          selectedTheme: readStoredThemeForDrive() || DEFAULT_THEME,
-          calendars: fallbackCalendars,
-        };
-      }
-
-      const parsedStoredCalendarsState = JSON.parse(rawStoredCalendarsState);
-      const storedCalendars = Array.isArray(parsedStoredCalendarsState?.calendars)
-        ? parsedStoredCalendarsState.calendars
-        : [];
-      const normalizedCalendars = storedCalendars
+    const buildDriveCalendarsFromLocalCalendars = ({
+      localCalendars = [],
+      dayStatesByLocalCalendarId = {},
+    } = {}) => {
+      const usedDriveIds = new Set();
+      const localToDriveMap = new Map();
+      const normalizedCalendars = localCalendars
         .map((calendar, index) => {
           if (!calendar || typeof calendar !== "object" || Array.isArray(calendar)) {
             return null;
@@ -1423,14 +1612,25 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
 
           const fallbackName = `Calendar ${index + 1}`;
           const localCalendarId =
-            typeof calendar.id === "string" && calendar.id.trim() ? calendar.id.trim() : "";
-          const dayEntries = localCalendarId ? storedDayStatesByCalendarId[localCalendarId] : {};
-          const driveCalendarId = toDriveEntityId(
-            "cal",
+            typeof calendar.id === "string" && calendar.id.trim()
+              ? calendar.id.trim()
+              : `calendar_${index + 1}`;
+          const driveCalendarId = resolveDriveCalendarId({
             localCalendarId,
-            `calendar_${index + 1}`,
-          );
-          const normalizedCalendar = {
+            rawCalendarId: typeof calendar.id === "string" ? calendar.id.trim() : "",
+            usedIds: usedDriveIds,
+          });
+          if (!driveCalendarId) {
+            return null;
+          }
+          localToDriveMap.set(localCalendarId, driveCalendarId);
+
+          const dayEntries =
+            localCalendarId && isObjectLike(dayStatesByLocalCalendarId)
+              ? dayStatesByLocalCalendarId[localCalendarId]
+              : {};
+          return {
+            id: driveCalendarId,
             name: normalizeBootstrapCalendarName(calendar.name, fallbackName),
             type: normalizeBootstrapCalendarType(calendar.type),
             color: normalizeCalendarColor(calendar.color, DEFAULT_CALENDAR_COLOR),
@@ -1440,23 +1640,52 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
               : {}),
             data: normalizeBootstrapCalendarDayEntries(dayEntries),
           };
-          if (driveCalendarId) {
-            normalizedCalendar.id = driveCalendarId;
-          }
-          return {
-            ...normalizedCalendar,
-          };
         })
         .filter(Boolean);
+
+      return {
+        normalizedCalendars,
+        localToDriveMap,
+      };
+    };
+
+    try {
+      const rawStoredCalendarsState = localStorage.getItem(CALENDARS_STORAGE_KEY);
+      const storedDayStatesByCalendarId = readBootstrapCalendarDayStates();
+      if (!rawStoredCalendarsState) {
+        const fallbackResult = buildDriveCalendarsFromLocalCalendars({
+          localCalendars: fallbackCalendars,
+          dayStatesByLocalCalendarId: {},
+        });
+        const driveCalendars =
+          fallbackResult.normalizedCalendars.length > 0
+            ? fallbackResult.normalizedCalendars
+            : fallbackCalendars;
+        return {
+          currentAccount: "default",
+          currentAccountId,
+          currentCalendarId: driveCalendars[0]?.id || "",
+          selectedTheme: readStoredThemeForDrive() || DEFAULT_THEME,
+          calendars: driveCalendars,
+        };
+      }
+
+      const parsedStoredCalendarsState = JSON.parse(rawStoredCalendarsState);
+      const storedCalendars = Array.isArray(parsedStoredCalendarsState?.calendars)
+        ? parsedStoredCalendarsState.calendars
+        : [];
+      const driveCalendarResult = buildDriveCalendarsFromLocalCalendars({
+        localCalendars: storedCalendars,
+        dayStatesByLocalCalendarId: storedDayStatesByCalendarId,
+      });
+      const normalizedCalendars = driveCalendarResult.normalizedCalendars;
       const requestedActiveLocalCalendarId =
         typeof parsedStoredCalendarsState?.activeCalendarId === "string"
           ? parsedStoredCalendarsState.activeCalendarId.trim()
           : "";
-      const requestedActiveDriveCalendarId = toDriveEntityId(
-        "cal",
-        requestedActiveLocalCalendarId,
-        "",
-      );
+      const requestedActiveDriveCalendarId = requestedActiveLocalCalendarId
+        ? driveCalendarResult.localToDriveMap.get(requestedActiveLocalCalendarId) || ""
+        : "";
       const resolvedActiveCalendarId =
         requestedActiveDriveCalendarId &&
         normalizedCalendars.some((calendar) => calendar.id === requestedActiveDriveCalendarId)
@@ -1471,12 +1700,20 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
         calendars: normalizedCalendars.length > 0 ? normalizedCalendars : fallbackCalendars,
       };
     } catch {
+      const fallbackResult = buildDriveCalendarsFromLocalCalendars({
+        localCalendars: fallbackCalendars,
+        dayStatesByLocalCalendarId: {},
+      });
+      const driveCalendars =
+        fallbackResult.normalizedCalendars.length > 0
+          ? fallbackResult.normalizedCalendars
+          : fallbackCalendars;
       return {
         currentAccount: "default",
         currentAccountId,
-        currentCalendarId: fallbackCalendars[0]?.id || "",
+        currentCalendarId: driveCalendars[0]?.id || "",
         selectedTheme: readStoredThemeForDrive() || DEFAULT_THEME,
-        calendars: fallbackCalendars,
+        calendars: driveCalendars,
       };
     }
   };
@@ -1596,7 +1833,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
   };
 
   const requestGoogleAccessTokenFromBackend = async () => {
-    const response = await fetch("/api/auth/google/access-token", {
+    const response = await backendFetch("/api/auth/google/access-token", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1987,6 +2224,8 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
       getOrCreateDriveAccountId();
     const selectedTheme = normalizeThemeForDrive(payloadObject.selectedTheme) || DEFAULT_THEME;
     const rawCalendars = Array.isArray(payloadObject.calendars) ? payloadObject.calendars : [];
+    const usedDriveCalendarIds = new Set();
+    const rawToDriveCalendarIdMap = new Map();
     const normalizedCalendars = rawCalendars
       .map((rawCalendar, index) => {
         if (!isObjectLike(rawCalendar)) {
@@ -1994,14 +2233,18 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
         }
 
         const fallbackName = `Calendar ${index + 1}`;
-        const fallbackIdToken = `calendar_${index + 1}`;
-        const calendarId = toDriveEntityId(
-          "cal",
-          typeof rawCalendar.id === "string" ? rawCalendar.id.trim() : "",
-          fallbackIdToken,
-        );
+        const rawCalendarId =
+          typeof rawCalendar.id === "string" ? rawCalendar.id.trim() : `calendar_${index + 1}`;
+        const calendarId = resolveDriveCalendarId({
+          localCalendarId: rawCalendarId || `calendar_${index + 1}`,
+          rawCalendarId,
+          usedIds: usedDriveCalendarIds,
+        });
         if (!calendarId) {
           return null;
+        }
+        if (rawCalendarId) {
+          rawToDriveCalendarIdMap.set(rawCalendarId, calendarId);
         }
 
         const calendarType = normalizeBootstrapCalendarType(rawCalendar.type);
@@ -2030,8 +2273,12 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
 
     const currentCalendarIdRaw =
       typeof payloadObject.currentCalendarId === "string" ? payloadObject.currentCalendarId.trim() : "";
+    const mappedCurrentCalendarId =
+      rawToDriveCalendarIdMap.get(currentCalendarIdRaw) || normalizeCanonicalDriveId(currentCalendarIdRaw);
     const currentCalendarId = normalizedCalendars.some((calendar) => calendar.id === currentCalendarIdRaw)
       ? currentCalendarIdRaw
+      : normalizedCalendars.some((calendar) => calendar.id === mappedCurrentCalendarId)
+        ? mappedCurrentCalendarId
       : normalizedCalendars[0]?.id || "";
 
     const configPayload = {
@@ -2413,7 +2660,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
   };
 
   const ensureDriveBootstrapConfigViaBackend = async () => {
-    const response = await fetch("/api/auth/google/bootstrap-config", {
+    const response = await backendFetch("/api/auth/google/bootstrap-config", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2598,7 +2845,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
   const refreshGoogleDriveStatus = async () => {
     if (!googleDriveButton) return;
     try {
-      const response = await fetch("/api/auth/google/status", {
+      const response = await backendFetch("/api/auth/google/status", {
         method: "GET",
         cache: "no-store",
       });
@@ -2715,7 +2962,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
           optionButton.setAttribute("aria-disabled", "true");
         }
         try {
-          const response = await fetch("/api/auth/google/disconnect", {
+          const response = await backendFetch("/api/auth/google/disconnect", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -2832,7 +3079,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
         setDriveBusy(true);
 
         try {
-          const response = await fetch("/api/auth/google/save-current-calendar-state", {
+          const response = await backendFetch("/api/auth/google/save-current-calendar-state", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -2897,7 +3144,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
         setDriveBusy(true);
 
         try {
-          const response = await fetch("/api/auth/google/load-state", {
+          const response = await backendFetch("/api/auth/google/load-state", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -2954,7 +3201,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
         event.preventDefault();
         let isConnectedForClearAll = isGoogleDriveConnected;
         try {
-          const statusResponse = await fetch("/api/auth/google/status", {
+          const statusResponse = await backendFetch("/api/auth/google/status", {
             method: "GET",
             cache: "no-store",
           });
