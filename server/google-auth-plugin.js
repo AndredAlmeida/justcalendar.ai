@@ -10,13 +10,41 @@ const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const GOOGLE_DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
+const GOOGLE_DRIVE_UPLOAD_FILES_URL = "https://www.googleapis.com/upload/drive/v3/files";
 const GOOGLE_DRIVE_ABOUT_URL = "https://www.googleapis.com/drive/v3/about";
 const GOOGLE_DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const GOOGLE_SCOPES = GOOGLE_DRIVE_FILE_SCOPE;
 const JUSTCALENDAR_DRIVE_FOLDER_NAME = "JustCalendar.ai";
+const JUSTCALENDAR_CONFIG_FILE_NAME = "justcalendar.json";
+const DEFAULT_BOOTSTRAP_ACCOUNT_NAME = "default";
+const DEFAULT_BOOTSTRAP_CALENDAR_TYPE = "signal-3";
+const DEFAULT_BOOTSTRAP_CALENDARS = Object.freeze([
+  {
+    name: "Sleep Score",
+    type: "score",
+  },
+  {
+    name: "Took Pills",
+    type: "check",
+  },
+  {
+    name: "Energy Tracker",
+    type: DEFAULT_BOOTSTRAP_CALENDAR_TYPE,
+  },
+  {
+    name: "TODOs",
+    type: "notes",
+  },
+  {
+    name: "Workout Intensity",
+    type: "score",
+  },
+]);
+const SUPPORTED_BOOTSTRAP_CALENDAR_TYPES = new Set(["signal-3", "score", "check", "notes"]);
 
 const pendingStates = new Map();
 let inFlightEnsureFolderPromise = null;
+let inFlightEnsureConfigPromise = null;
 
 function parseCookies(req) {
   const headerValue = req.headers?.cookie;
@@ -37,6 +65,52 @@ function parseCookies(req) {
     cookieMap[rawName] = decodeURIComponent(rawValue || "");
     return cookieMap;
   }, {});
+}
+
+function readJsonRequestBody(req, maxBytes = 256 * 1024) {
+  return new Promise((resolveBody, rejectBody) => {
+    const chunks = [];
+    let totalBytes = 0;
+
+    req.on("data", (chunk) => {
+      const chunkLength = Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(String(chunk));
+      totalBytes += chunkLength;
+      if (totalBytes > maxBytes) {
+        rejectBody(new Error("request_body_too_large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+
+    req.on("end", () => {
+      if (chunks.length === 0) {
+        resolveBody({});
+        return;
+      }
+
+      const rawBody = Buffer.concat(chunks).toString("utf8").trim();
+      if (!rawBody) {
+        resolveBody({});
+        return;
+      }
+
+      try {
+        const parsedBody = JSON.parse(rawBody);
+        if (parsedBody && typeof parsedBody === "object" && !Array.isArray(parsedBody)) {
+          resolveBody(parsedBody);
+          return;
+        }
+        rejectBody(new Error("request_body_must_be_object"));
+      } catch {
+        rejectBody(new Error("invalid_json_request_body"));
+      }
+    });
+
+    req.on("error", (error) => {
+      rejectBody(error);
+    });
+  });
 }
 
 function buildCookie(
@@ -88,6 +162,131 @@ function getSharedCookieDomain(requestOrigin) {
 
 function escapeDriveQueryValue(value) {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function normalizeBootstrapCalendarType(rawType) {
+  const normalizedType =
+    typeof rawType === "string" ? rawType.trim().toLowerCase() : DEFAULT_BOOTSTRAP_CALENDAR_TYPE;
+  return SUPPORTED_BOOTSTRAP_CALENDAR_TYPES.has(normalizedType)
+    ? normalizedType
+    : DEFAULT_BOOTSTRAP_CALENDAR_TYPE;
+}
+
+function normalizeBootstrapCalendarName(rawName, fallbackName) {
+  const nextName = String(rawName ?? "").replace(/\s+/g, " ").trim();
+  return nextName || fallbackName;
+}
+
+const ENTITY_ID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const ENTITY_ID_CHARSET_SIZE = ENTITY_ID_ALPHABET.length;
+const ENTITY_ID_RANDOM_TOKEN_LENGTH = 17;
+
+function createHighEntropyToken(length = ENTITY_ID_RANDOM_TOKEN_LENGTH) {
+  const tokenLength = Number.isInteger(length) && length > 0 ? length : ENTITY_ID_RANDOM_TOKEN_LENGTH;
+  let token = "";
+  while (token.length < tokenLength) {
+    const randomChunk = randomBytes(Math.max(tokenLength, 16));
+    for (const rawByte of randomChunk) {
+      if (rawByte >= 248) {
+        continue;
+      }
+      token += ENTITY_ID_ALPHABET[rawByte % ENTITY_ID_CHARSET_SIZE];
+      if (token.length >= tokenLength) {
+        break;
+      }
+    }
+  }
+  return token;
+}
+
+function normalizeIncomingEntityId(rawValue, prefix) {
+  const candidateId = typeof rawValue === "string" ? rawValue.trim() : "";
+  const expectedPrefix = `${prefix}_`;
+  if (!candidateId || !candidateId.startsWith(expectedPrefix)) {
+    return "";
+  }
+
+  const candidateToken = candidateId.slice(expectedPrefix.length);
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{5,63}$/.test(candidateToken)) {
+    return "";
+  }
+
+  return `${prefix}_${candidateToken}`;
+}
+
+function generateEntityId(prefix, usedIds = null) {
+  let nextId = "";
+  do {
+    nextId = `${prefix}_${createHighEntropyToken()}`;
+  } while (usedIds instanceof Set && usedIds.has(nextId));
+  if (usedIds instanceof Set) {
+    usedIds.add(nextId);
+  }
+  return nextId;
+}
+
+function normalizeBootstrapCalendars(rawCalendars) {
+  const sourceCalendars = Array.isArray(rawCalendars) ? rawCalendars : [];
+  const normalizedCalendars = sourceCalendars
+    .map((rawCalendar, index) => {
+      if (!rawCalendar || typeof rawCalendar !== "object" || Array.isArray(rawCalendar)) {
+        return null;
+      }
+
+      const fallbackName = `Calendar ${index + 1}`;
+      return {
+        id: normalizeIncomingEntityId(rawCalendar.id, "cal"),
+        name: normalizeBootstrapCalendarName(rawCalendar.name, fallbackName),
+        type: normalizeBootstrapCalendarType(rawCalendar.type),
+      };
+    })
+    .filter(Boolean);
+
+  if (normalizedCalendars.length > 0) {
+    return normalizedCalendars;
+  }
+
+  return DEFAULT_BOOTSTRAP_CALENDARS.map((calendar) => ({ ...calendar }));
+}
+
+function buildJustCalendarConfigPayload(rawPayload = {}) {
+  const payloadObject =
+    rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload) ? rawPayload : {};
+  const requestedCurrentAccountName =
+    typeof payloadObject.currentAccount === "string" ? payloadObject.currentAccount.trim() : "";
+  const currentAccountName = requestedCurrentAccountName || DEFAULT_BOOTSTRAP_ACCOUNT_NAME;
+  const currentAccountId =
+    normalizeIncomingEntityId(payloadObject.currentAccountId, "acc") || generateEntityId("acc");
+
+  const normalizedCalendars = normalizeBootstrapCalendars(payloadObject.calendars);
+  const usedCalendarIds = new Set();
+  const accountCalendars = normalizedCalendars.map((calendar) => {
+    const requestedCalendarId = normalizeIncomingEntityId(calendar.id, "cal");
+    const calendarId =
+      requestedCalendarId && !usedCalendarIds.has(requestedCalendarId)
+        ? requestedCalendarId
+        : generateEntityId("cal", usedCalendarIds);
+    usedCalendarIds.add(calendarId);
+
+    return {
+      id: calendarId,
+      name: calendar.name,
+      type: calendar.type,
+      "data-file": `${currentAccountId}_${calendarId}.json`,
+    };
+  });
+
+  return {
+    version: 1,
+    "current-account-id": currentAccountId,
+    accounts: {
+      [currentAccountId]: {
+        id: currentAccountId,
+        name: currentAccountName,
+        calendars: accountCalendars,
+      },
+    },
+  };
 }
 
 function parseScopeSet(scopeValue) {
@@ -208,6 +407,10 @@ function normalizeStoredAuthState(rawState) {
     typeof storedState.driveFolderId === "string" && storedState.driveFolderId.trim()
       ? storedState.driveFolderId.trim()
       : "";
+  const configFileId =
+    typeof storedState.configFileId === "string" && storedState.configFileId.trim()
+      ? storedState.configFileId.trim()
+      : "";
 
   const updatedAt =
     typeof storedState.updatedAt === "string" && storedState.updatedAt.trim()
@@ -222,6 +425,7 @@ function normalizeStoredAuthState(rawState) {
     accessTokenExpiresAt,
     drivePermissionId,
     driveFolderId,
+    configFileId,
     updatedAt,
   };
 }
@@ -449,6 +653,275 @@ async function fetchDrivePermissionId({ accessToken }) {
     ok: true,
     permissionId,
   };
+}
+
+async function findDriveFileByNameInFolder({ accessToken, folderId, fileName }) {
+  if (!accessToken || !folderId || !fileName) {
+    return {
+      ok: false,
+      error: "missing_drive_file_lookup_params",
+    };
+  }
+
+  const escapedFileName = escapeDriveQueryValue(fileName);
+  const escapedFolderId = escapeDriveQueryValue(folderId);
+  const listUrl = new URL(GOOGLE_DRIVE_FILES_URL);
+  listUrl.searchParams.set(
+    "q",
+    `name = '${escapedFileName}' and '${escapedFolderId}' in parents and trashed = false`,
+  );
+  listUrl.searchParams.set("spaces", "drive");
+  listUrl.searchParams.set("fields", "files(id,name,mimeType)");
+  listUrl.searchParams.set("pageSize", "1");
+
+  const listResponse = await fetch(listUrl, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    signal: AbortSignal.timeout(8_000),
+  });
+  const listPayload = await listResponse.json().catch(() => ({}));
+
+  if (!listResponse.ok) {
+    return {
+      ok: false,
+      error: "config_lookup_failed",
+      status: listResponse.status,
+      details: listPayload?.error || "unknown_error",
+    };
+  }
+
+  const existingFile =
+    Array.isArray(listPayload?.files) && listPayload.files.length > 0 ? listPayload.files[0] : null;
+  if (!existingFile || typeof existingFile.id !== "string" || !existingFile.id) {
+    return {
+      ok: true,
+      found: false,
+    };
+  }
+
+  return {
+    ok: true,
+    found: true,
+    fileId: existingFile.id,
+  };
+}
+
+async function createDriveJsonFileInFolder({ accessToken, folderId, fileName, payload }) {
+  if (!accessToken || !folderId || !fileName) {
+    return {
+      ok: false,
+      error: "missing_drive_file_create_params",
+    };
+  }
+
+  const metadata = {
+    name: fileName,
+    parents: [folderId],
+    mimeType: "application/json",
+  };
+  const fileContents = `${JSON.stringify(payload, null, 2)}\n`;
+  const boundary = `justcalendar_boundary_${randomBytes(12).toString("hex")}`;
+  const multipartBody = [
+    `--${boundary}`,
+    "Content-Type: application/json; charset=UTF-8",
+    "",
+    JSON.stringify(metadata),
+    `--${boundary}`,
+    "Content-Type: application/json; charset=UTF-8",
+    "",
+    fileContents,
+    `--${boundary}--`,
+    "",
+  ].join("\r\n");
+
+  const createUrl = new URL(GOOGLE_DRIVE_UPLOAD_FILES_URL);
+  createUrl.searchParams.set("uploadType", "multipart");
+  createUrl.searchParams.set("fields", "id,name,mimeType");
+
+  const createResponse = await fetch(createUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": `multipart/related; boundary=${boundary}`,
+    },
+    signal: AbortSignal.timeout(10_000),
+    body: multipartBody,
+  });
+  const createPayload = await createResponse.json().catch(() => ({}));
+
+  if (!createResponse.ok) {
+    return {
+      ok: false,
+      error: "config_create_failed",
+      status: createResponse.status,
+      details: createPayload?.error || "unknown_error",
+    };
+  }
+
+  const createdFileId =
+    createPayload && typeof createPayload.id === "string" ? createPayload.id : "";
+  if (!createdFileId) {
+    return {
+      ok: false,
+      error: "config_create_missing_id",
+    };
+  }
+
+  return {
+    ok: true,
+    fileId: createdFileId,
+  };
+}
+
+async function ensureJustCalendarConfigFile({ accessToken, folderId, configPayload }) {
+  const existingFileResult = await findDriveFileByNameInFolder({
+    accessToken,
+    folderId,
+    fileName: JUSTCALENDAR_CONFIG_FILE_NAME,
+  });
+  if (!existingFileResult.ok) {
+    return existingFileResult;
+  }
+  if (existingFileResult.found) {
+    return {
+      ok: true,
+      created: false,
+      fileId: existingFileResult.fileId,
+    };
+  }
+
+  const createResult = await createDriveJsonFileInFolder({
+    accessToken,
+    folderId,
+    fileName: JUSTCALENDAR_CONFIG_FILE_NAME,
+    payload: configPayload,
+  });
+  if (!createResult.ok) {
+    return createResult;
+  }
+
+  return {
+    ok: true,
+    created: true,
+    fileId: createResult.fileId,
+  };
+}
+
+async function ensureJustCalendarConfigForCurrentConnection({
+  accessToken = "",
+  config,
+  configPayload = {},
+} = {}) {
+  let storedState = readStoredAuthState();
+  if (!hasGoogleScope(storedState.scope, GOOGLE_DRIVE_FILE_SCOPE)) {
+    return {
+      ok: false,
+      error: "missing_drive_scope",
+      status: 403,
+      details: {
+        message:
+          "Current Google token does not include drive.file scope. Reconnect and approve Google Drive access.",
+      },
+    };
+  }
+
+  if (inFlightEnsureConfigPromise) {
+    return inFlightEnsureConfigPromise;
+  }
+
+  inFlightEnsureConfigPromise = (async () => {
+    let freshState = readStoredAuthState();
+
+    const folderResult = await ensureJustCalendarFolderForCurrentConnection({
+      accessToken,
+      config,
+    });
+    if (!folderResult.ok) {
+      return folderResult;
+    }
+
+    const folderId =
+      folderResult && typeof folderResult.folderId === "string" ? folderResult.folderId : "";
+    if (!folderId) {
+      return {
+        ok: false,
+        error: "missing_folder_id",
+      };
+    }
+
+    let tokenToUse =
+      typeof accessToken === "string" && accessToken.trim()
+        ? accessToken.trim()
+        : hasSufficientlyValidAccessToken(freshState)
+          ? freshState.accessToken
+          : "";
+    if (!tokenToUse && config?.clientId && config?.clientSecret && freshState.refreshToken) {
+      const refreshResult = await refreshAccessTokenForNonCriticalTask({
+        config,
+        storedState: freshState,
+      });
+      if (refreshResult.ok) {
+        freshState = refreshResult.state;
+        tokenToUse = freshState.accessToken;
+      } else {
+        return {
+          ok: false,
+          error: "token_unavailable",
+          status: refreshResult.status || 401,
+          details: refreshResult.payload || {
+            message:
+              "No valid access token available for non-critical config bootstrap. Login state is unchanged.",
+          },
+        };
+      }
+    }
+    if (!tokenToUse) {
+      return {
+        ok: false,
+        error: "token_unavailable",
+        status: 401,
+        details: {
+          message:
+            "No valid access token available for non-critical config bootstrap. Login state is unchanged.",
+        },
+      };
+    }
+
+    const configFileResult = await ensureJustCalendarConfigFile({
+      accessToken: tokenToUse,
+      folderId,
+      configPayload: buildJustCalendarConfigPayload(configPayload),
+    });
+    if (!configFileResult.ok) {
+      return configFileResult;
+    }
+
+    const configFileId =
+      configFileResult && typeof configFileResult.fileId === "string" ? configFileResult.fileId : "";
+    if (configFileId && configFileId !== freshState.configFileId) {
+      writeStoredAuthState({
+        ...freshState,
+        driveFolderId: folderId || freshState.driveFolderId || "",
+        configFileId,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    return {
+      ok: true,
+      created: Boolean(configFileResult.created),
+      fileId: configFileId,
+      folderId,
+    };
+  })();
+
+  try {
+    return await inFlightEnsureConfigPromise;
+  } finally {
+    inFlightEnsureConfigPromise = null;
+  }
 }
 
 async function refreshAccessToken({ config, storedState }) {
@@ -743,13 +1216,14 @@ async function ensureJustCalendarFolderForCurrentConnection({ accessToken = "", 
         const remainingScopes = Array.from(parseScopeSet(freshState.scope)).filter(
           (scopeValue) => scopeValue !== GOOGLE_DRIVE_FILE_SCOPE,
         );
-        writeStoredAuthState({
-          ...freshState,
-          scope: remainingScopes.join(" ").trim(),
-          driveFolderId: "",
-          updatedAt: new Date().toISOString(),
-        });
-      }
+      writeStoredAuthState({
+        ...freshState,
+        scope: remainingScopes.join(" ").trim(),
+        driveFolderId: "",
+        configFileId: "",
+        updatedAt: new Date().toISOString(),
+      });
+    }
       return folderResult;
     }
 
@@ -958,18 +1432,23 @@ function createGoogleAuthPlugin(config) {
       accessTokenExpiresAt,
       drivePermissionId,
       driveFolderId: hasDriveScope ? existingState.driveFolderId || "" : "",
+      configFileId: hasDriveScope ? existingState.configFileId || "" : "",
       updatedAt: new Date().toISOString(),
     });
 
-    // Keep login-state update independent from Drive folder checks.
-    void ensureJustCalendarFolderForCurrentConnection({ accessToken, config: googleConfig })
-      .then((folderResult) => {
-        if (!folderResult.ok) {
-          console.warn("Google Drive folder ensure failed during login callback.", folderResult);
+    // Keep login-state update independent from Drive bootstrap checks.
+    void ensureJustCalendarConfigForCurrentConnection({
+      accessToken,
+      config: googleConfig,
+      configPayload: {},
+    })
+      .then((configResult) => {
+        if (!configResult.ok) {
+          console.warn("Google Drive config bootstrap failed during login callback.", configResult);
         }
       })
       .catch((error) => {
-        console.warn("Google Drive folder ensure failed during login callback.", error);
+        console.warn("Google Drive config bootstrap failed during login callback.", error);
       });
 
     const redirectTarget =
@@ -1006,6 +1485,7 @@ function createGoogleAuthPlugin(config) {
       scopes: hasIdentitySession ? storedState.scope : "",
       driveScopeGranted: hasIdentitySession ? hasDriveScope : false,
       driveFolderReady: hasIdentitySession ? Boolean(storedState.driveFolderId) : false,
+      driveConfigReady: hasIdentitySession ? Boolean(storedState.configFileId) : false,
       configured: Boolean(googleConfig.clientId && googleConfig.clientSecret),
     });
   };
@@ -1088,6 +1568,88 @@ function createGoogleAuthPlugin(config) {
     });
   };
 
+  const handleBootstrapConfig = async (req, res) => {
+    if (!ensureGoogleOAuthConfigured(googleConfig, res)) {
+      return;
+    }
+
+    let bootstrapRequestPayload = {};
+    try {
+      bootstrapRequestPayload = await readJsonRequestBody(req);
+    } catch (error) {
+      jsonResponse(res, 400, {
+        ok: false,
+        error: "invalid_bootstrap_payload",
+        details: error instanceof Error ? error.message : "unknown_error",
+      });
+      return;
+    }
+
+    const tokenStateResult = await ensureValidAccessToken({ config: googleConfig });
+    if (!tokenStateResult.ok) {
+      jsonResponse(res, tokenStateResult.status, {
+        ok: false,
+        ...(tokenStateResult.payload || {
+          error: "not_connected",
+          message: "Google Drive is not connected.",
+        }),
+      });
+      return;
+    }
+
+    const stateWithToken = tokenStateResult.state;
+    if (!hasGoogleScope(stateWithToken.scope, GOOGLE_DRIVE_FILE_SCOPE)) {
+      jsonResponse(res, 403, {
+        ok: false,
+        error: "missing_drive_scope",
+        details: {
+          message:
+            "Current Google token does not include drive.file scope. Reconnect and approve Google Drive access.",
+        },
+      });
+      return;
+    }
+
+    const configPayload = buildJustCalendarConfigPayload(bootstrapRequestPayload);
+    const currentAccountId =
+      typeof configPayload["current-account-id"] === "string"
+        ? configPayload["current-account-id"]
+        : "";
+    const accountConfig = currentAccountId ? configPayload?.accounts?.[currentAccountId] : null;
+    const accountName =
+      accountConfig && typeof accountConfig.name === "string"
+        ? accountConfig.name
+        : DEFAULT_BOOTSTRAP_ACCOUNT_NAME;
+    const accountCalendars = Array.isArray(accountConfig?.calendars)
+      ? accountConfig.calendars
+      : [];
+
+    const ensureConfigResult = await ensureJustCalendarConfigForCurrentConnection({
+      accessToken: stateWithToken.accessToken,
+      config: googleConfig,
+      configPayload: bootstrapRequestPayload,
+    });
+    if (!ensureConfigResult.ok) {
+      jsonResponse(res, Number(ensureConfigResult.status) || 502, {
+        ok: false,
+        error: ensureConfigResult.error || "ensure_config_failed",
+        details: ensureConfigResult.details || null,
+      });
+      return;
+    }
+
+    jsonResponse(res, 200, {
+      ok: true,
+      created: Boolean(ensureConfigResult.created),
+      folderId: ensureConfigResult.folderId || "",
+      fileId: ensureConfigResult.fileId || "",
+      fileName: JUSTCALENDAR_CONFIG_FILE_NAME,
+      accountId: currentAccountId || "",
+      account: accountName,
+      calendars: accountCalendars,
+    });
+  };
+
   const attachAuthRoutes = (middlewares) => {
     middlewares.use(async (req, res, next) => {
       try {
@@ -1145,6 +1707,15 @@ function createGoogleAuthPlugin(config) {
             return;
           }
           await handleEnsureFolder(res);
+          return;
+        }
+
+        if (requestUrl.pathname === "/api/auth/google/bootstrap-config") {
+          if (req.method !== "POST") {
+            methodNotAllowed(res);
+            return;
+          }
+          await handleBootstrapConfig(req, res);
           return;
         }
 
