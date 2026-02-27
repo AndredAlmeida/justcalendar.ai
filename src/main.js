@@ -1023,9 +1023,39 @@ function setupProfileSwitcher({ switcher, button, options }) {
   const googleDriveButton = options.querySelector('[data-profile-action="google-drive"]');
   const googleDriveLabel = options.querySelector("#profile-google-drive-label");
   const GOOGLE_CONNECTED_COOKIE_NAME = "justcal_google_connected";
+  const GOOGLE_AUTH_LOG_PREFIX = "[JustCalendar][GoogleDriveAuth]";
   let isGoogleDriveConnected = false;
   let isGoogleDriveConfigured = true;
   let googleSub = "";
+
+  const logGoogleAuthMessage = (level, message, details) => {
+    const logger = typeof console[level] === "function" ? console[level] : console.log;
+    if (typeof details === "undefined") {
+      logger(`${GOOGLE_AUTH_LOG_PREFIX} ${message}`);
+      return;
+    }
+    logger(`${GOOGLE_AUTH_LOG_PREFIX} ${message}`, details);
+  };
+
+  const readResponsePayload = async (response) => {
+    try {
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        return await response.json();
+      }
+      const textPayload = await response.text();
+      if (!textPayload) {
+        return null;
+      }
+      try {
+        return JSON.parse(textPayload);
+      } catch {
+        return { raw: textPayload };
+      }
+    } catch {
+      return null;
+    }
+  };
 
   const readCookieValue = (cookieName) => {
     const escapedCookieName = cookieName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1108,17 +1138,42 @@ function setupProfileSwitcher({ switcher, button, options }) {
         method: "GET",
         cache: "no-store",
       });
+      const statusPayload = await readResponsePayload(response);
       if (!response.ok) {
-        throw new Error("status_request_failed");
+        logGoogleAuthMessage("error", "Failed to fetch Google status endpoint.", {
+          status: response.status,
+          statusText: response.statusText,
+          payload: statusPayload,
+        });
+        throw new Error(`status_request_failed_${response.status}`);
       }
-      const statusPayload = await response.json();
       setGoogleDriveUiState({
         connected: Boolean(statusPayload?.connected),
         configured: Boolean(statusPayload?.configured ?? true),
         openIdSubject:
           typeof statusPayload?.openIdSubject === "string" ? statusPayload.openIdSubject : "",
       });
+
+      if (!statusPayload?.connected) {
+        logGoogleAuthMessage("warn", "Google status indicates disconnected state.", {
+          statusPayload,
+          connectedCookie: hasGoogleConnectedCookie(),
+        });
+      } else if (!statusPayload?.driveFolderReady) {
+        logGoogleAuthMessage(
+          "warn",
+          "Google account is connected but JustCalendar folder is not ready yet.",
+          statusPayload,
+        );
+      }
     } catch {
+      logGoogleAuthMessage(
+        "error",
+        "Status refresh failed; applying fallback UI state from cookie if available.",
+        {
+          connectedCookie: hasGoogleConnectedCookie(),
+        },
+      );
       setGoogleDriveUiState({
         connected: false,
         configured: true,
@@ -1166,6 +1221,7 @@ function setupProfileSwitcher({ switcher, button, options }) {
         }
 
         if (!isGoogleDriveConnected) {
+          logGoogleAuthMessage("info", "Starting Google OAuth redirect.");
           setExpanded(false);
           if (optionButton instanceof HTMLButtonElement) {
             window.location.assign("/api/auth/google/start");
@@ -1182,11 +1238,23 @@ function setupProfileSwitcher({ switcher, button, options }) {
           optionButton.setAttribute("aria-disabled", "true");
         }
         try {
-          await fetch("/api/auth/google/disconnect", {
+          const response = await fetch("/api/auth/google/disconnect", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
+          });
+          if (!response.ok) {
+            const payload = await readResponsePayload(response);
+            logGoogleAuthMessage("error", "Google disconnect endpoint returned an error.", {
+              status: response.status,
+              statusText: response.statusText,
+              payload,
+            });
+          }
+        } catch (error) {
+          logGoogleAuthMessage("error", "Google disconnect request failed.", {
+            error: error instanceof Error ? error.message : String(error),
           });
         } finally {
           if (optionButton instanceof HTMLButtonElement) {
@@ -1205,6 +1273,62 @@ function setupProfileSwitcher({ switcher, button, options }) {
         event.preventDefault();
         await refreshGoogleDriveStatus();
         console.log("google_sub", googleSub || null);
+
+        if (!isGoogleDriveConfigured) {
+          logGoogleAuthMessage(
+            "warn",
+            "Test 1 cannot ensure folder because Google Drive OAuth is not configured.",
+          );
+          setExpanded(false);
+          return;
+        }
+
+        if (!isGoogleDriveConnected) {
+          logGoogleAuthMessage(
+            "warn",
+            "Test 1 cannot ensure folder because Google Drive is not connected.",
+          );
+          setExpanded(false);
+          return;
+        }
+
+        if (optionButton instanceof HTMLButtonElement) {
+          optionButton.disabled = true;
+        }
+
+        try {
+          const response = await fetch("/api/auth/google/ensure-folder", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+          const payload = await readResponsePayload(response);
+          if (!response.ok || !payload?.ok) {
+            logGoogleAuthMessage("error", "Test 1 failed to ensure JustCalendar folder.", {
+              status: response.status,
+              statusText: response.statusText,
+              payload,
+            });
+          } else if (payload.created) {
+            logGoogleAuthMessage("info", "Test 1 created JustCalendar folder.", payload);
+          } else {
+            logGoogleAuthMessage(
+              "info",
+              "Test 1 confirmed JustCalendar folder already exists.",
+              payload,
+            );
+          }
+        } catch (error) {
+          logGoogleAuthMessage("error", "Test 1 request failed while ensuring folder.", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        } finally {
+          if (optionButton instanceof HTMLButtonElement) {
+            optionButton.disabled = false;
+          }
+          await refreshGoogleDriveStatus();
+        }
         setExpanded(false);
         return;
       }

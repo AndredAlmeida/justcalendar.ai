@@ -9,7 +9,11 @@ const TOKEN_STORE_PATH = resolve(process.cwd(), ".data/google-auth-store.json");
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
-const GOOGLE_SCOPES = ["openid", "https://www.googleapis.com/auth/drive.file"].join(" ");
+const GOOGLE_DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
+const GOOGLE_OPENID_SCOPE = "openid";
+const GOOGLE_DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const GOOGLE_SCOPES = [GOOGLE_OPENID_SCOPE, GOOGLE_DRIVE_FILE_SCOPE].join(" ");
+const JUSTCALENDAR_DRIVE_FOLDER_NAME = "JustCalendar";
 
 const pendingStates = new Map();
 
@@ -34,10 +38,17 @@ function parseCookies(req) {
   }, {});
 }
 
-function buildCookie(name, value, { maxAgeSeconds, httpOnly = true, secure = false } = {}) {
+function buildCookie(
+  name,
+  value,
+  { maxAgeSeconds, httpOnly = true, secure = false, domain = "" } = {},
+) {
   const cookieParts = [`${name}=${encodeURIComponent(value)}`, "Path=/", "SameSite=Lax"];
   if (typeof maxAgeSeconds === "number") {
     cookieParts.push(`Max-Age=${Math.max(0, Math.floor(maxAgeSeconds))}`);
+  }
+  if (typeof domain === "string" && domain.trim()) {
+    cookieParts.push(`Domain=${domain.trim()}`);
   }
   if (httpOnly) {
     cookieParts.push("HttpOnly");
@@ -60,6 +71,18 @@ function getRequestOrigin(req) {
   const protocol = forwardedProto || (req.socket?.encrypted ? "https" : "http");
   const host = forwardedHost || req.headers.host || "localhost";
   return `${protocol}://${host}`;
+}
+
+function getSharedCookieDomain(requestOrigin) {
+  try {
+    const hostname = new URL(requestOrigin).hostname.toLowerCase();
+    if (hostname === "justcalendar.ai" || hostname.endsWith(".justcalendar.ai")) {
+      return ".justcalendar.ai";
+    }
+  } catch {
+    // Ignore parse failures and fall back to host-only cookies.
+  }
+  return "";
 }
 
 function decodeJwtPayload(jwtToken) {
@@ -93,6 +116,52 @@ function extractOpenIdSubjectFromIdToken(idToken) {
   return typeof payload.sub === "string" ? payload.sub : "";
 }
 
+function escapeDriveQueryValue(value) {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function parseScopeSet(scopeValue) {
+  if (typeof scopeValue !== "string" || !scopeValue.trim()) {
+    return new Set();
+  }
+  return new Set(scopeValue.trim().split(/\s+/).filter(Boolean));
+}
+
+function hasGoogleScope(scopeValue, expectedScope) {
+  if (!expectedScope) return false;
+  const scopeSet = parseScopeSet(scopeValue);
+  return scopeSet.has(expectedScope);
+}
+
+function mergeGoogleScopes(primaryScopeValue, fallbackScopeValue) {
+  const mergedSet = new Set();
+  for (const scopeToken of parseScopeSet(fallbackScopeValue)) {
+    mergedSet.add(scopeToken);
+  }
+  for (const scopeToken of parseScopeSet(primaryScopeValue)) {
+    mergedSet.add(scopeToken);
+  }
+  return Array.from(mergedSet).join(" ").trim();
+}
+
+function buildGoogleAuthorizationUrl({ clientId, redirectUri, state }) {
+  const queryParts = [
+    ["client_id", clientId],
+    ["redirect_uri", redirectUri],
+    ["response_type", "code"],
+    ["scope", GOOGLE_SCOPES],
+    ["access_type", "offline"],
+    ["prompt", "consent"],
+    ["include_granted_scopes", "false"],
+    ["state", state],
+  ];
+
+  const queryString = queryParts
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join("&");
+  return `${GOOGLE_AUTH_URL}?${queryString}`;
+}
+
 function normalizeStoredAuthState(rawState) {
   const storedState =
     rawState && typeof rawState === "object" && !Array.isArray(rawState) ? rawState : {};
@@ -120,6 +189,10 @@ function normalizeStoredAuthState(rawState) {
     typeof storedState.openIdSubject === "string" && storedState.openIdSubject.trim()
       ? storedState.openIdSubject.trim()
       : "";
+  const driveFolderId =
+    typeof storedState.driveFolderId === "string" && storedState.driveFolderId.trim()
+      ? storedState.driveFolderId.trim()
+      : "";
 
   const updatedAt =
     typeof storedState.updatedAt === "string" && storedState.updatedAt.trim()
@@ -133,6 +206,7 @@ function normalizeStoredAuthState(rawState) {
     scope,
     accessTokenExpiresAt,
     openIdSubject,
+    driveFolderId,
     updatedAt,
   };
 }
@@ -229,6 +303,93 @@ function ensureGoogleOAuthConfigured(config, res) {
   return true;
 }
 
+async function ensureJustCalendarFolder({ accessToken }) {
+  if (!accessToken) {
+    return {
+      ok: false,
+      error: "missing_access_token",
+    };
+  }
+
+  const escapedFolderName = escapeDriveQueryValue(JUSTCALENDAR_DRIVE_FOLDER_NAME);
+  const listUrl = new URL(GOOGLE_DRIVE_FILES_URL);
+  listUrl.searchParams.set(
+    "q",
+    `name = '${escapedFolderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+  );
+  listUrl.searchParams.set("spaces", "drive");
+  listUrl.searchParams.set("fields", "files(id,name)");
+  listUrl.searchParams.set("pageSize", "1");
+
+  const listResponse = await fetch(listUrl, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    signal: AbortSignal.timeout(8_000),
+  });
+  const listPayload = await listResponse.json().catch(() => ({}));
+
+  if (!listResponse.ok) {
+    return {
+      ok: false,
+      error: "folder_lookup_failed",
+      status: listResponse.status,
+      details: listPayload?.error || "unknown_error",
+    };
+  }
+
+  const firstExistingFolder =
+    Array.isArray(listPayload?.files) && listPayload.files.length > 0 ? listPayload.files[0] : null;
+  const existingFolderId =
+    firstExistingFolder && typeof firstExistingFolder.id === "string" ? firstExistingFolder.id : "";
+  if (existingFolderId) {
+    return {
+      ok: true,
+      created: false,
+      folderId: existingFolderId,
+    };
+  }
+
+  const createResponse = await fetch(GOOGLE_DRIVE_FILES_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    signal: AbortSignal.timeout(8_000),
+    body: JSON.stringify({
+      name: JUSTCALENDAR_DRIVE_FOLDER_NAME,
+      mimeType: "application/vnd.google-apps.folder",
+    }),
+  });
+  const createPayload = await createResponse.json().catch(() => ({}));
+
+  if (!createResponse.ok) {
+    return {
+      ok: false,
+      error: "folder_create_failed",
+      status: createResponse.status,
+      details: createPayload?.error || "unknown_error",
+    };
+  }
+
+  const createdFolderId =
+    createPayload && typeof createPayload.id === "string" ? createPayload.id : "";
+  if (!createdFolderId) {
+    return {
+      ok: false,
+      error: "folder_create_missing_id",
+    };
+  }
+
+  return {
+    ok: true,
+    created: true,
+    folderId: createdFolderId,
+  };
+}
+
 async function refreshAccessToken({ config, storedState }) {
   if (!storedState.refreshToken) {
     return {
@@ -306,10 +467,91 @@ async function refreshAccessToken({ config, storedState }) {
       typeof tokenPayload.token_type === "string" && tokenPayload.token_type
         ? tokenPayload.token_type
         : storedState.tokenType || "Bearer",
-    scope:
-      typeof tokenPayload.scope === "string" && tokenPayload.scope
-        ? tokenPayload.scope
-        : storedState.scope || GOOGLE_SCOPES,
+    scope: mergeGoogleScopes(tokenPayload.scope, storedState.scope || GOOGLE_SCOPES),
+    accessTokenExpiresAt: nextExpiry,
+    refreshToken:
+      typeof tokenPayload.refresh_token === "string" && tokenPayload.refresh_token
+        ? tokenPayload.refresh_token
+        : storedState.refreshToken,
+    updatedAt: new Date().toISOString(),
+  });
+
+  return {
+    ok: true,
+    state: nextState,
+  };
+}
+
+async function refreshAccessTokenForNonCriticalTask({ config, storedState }) {
+  if (!storedState.refreshToken) {
+    return {
+      ok: false,
+      status: 401,
+      payload: {
+        error: "not_connected",
+        message: "Google Drive is not connected.",
+      },
+    };
+  }
+
+  const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      grant_type: "refresh_token",
+      refresh_token: storedState.refreshToken,
+    }),
+  });
+
+  const tokenPayload = await tokenResponse.json().catch(() => ({}));
+
+  if (!tokenResponse.ok) {
+    return {
+      ok: false,
+      status: tokenPayload?.error === "invalid_grant" ? 401 : 502,
+      payload: {
+        error:
+          tokenPayload?.error === "invalid_grant" ? "invalid_grant" : "token_refresh_failed",
+        message:
+          tokenPayload?.error === "invalid_grant"
+            ? "Stored Google refresh token is invalid. Connect again."
+            : "Failed to refresh Google access token.",
+        details: tokenPayload?.error || "unknown_error",
+      },
+    };
+  }
+
+  const nextAccessToken =
+    typeof tokenPayload.access_token === "string" ? tokenPayload.access_token : "";
+  const expiresInSeconds = Number(tokenPayload.expires_in);
+  const nextExpiry =
+    Number.isFinite(expiresInSeconds) && expiresInSeconds > 0
+      ? Date.now() + expiresInSeconds * 1000
+      : Date.now() + 55 * 60 * 1000;
+
+  if (!nextAccessToken) {
+    return {
+      ok: false,
+      status: 502,
+      payload: {
+        error: "token_refresh_failed",
+        message: "Google token refresh response did not include access_token.",
+      },
+    };
+  }
+
+  const nextState = writeStoredAuthState({
+    ...storedState,
+    accessToken: nextAccessToken,
+    tokenType:
+      typeof tokenPayload.token_type === "string" && tokenPayload.token_type
+        ? tokenPayload.token_type
+        : storedState.tokenType || "Bearer",
+    scope: mergeGoogleScopes(tokenPayload.scope, storedState.scope || GOOGLE_SCOPES),
     accessTokenExpiresAt: nextExpiry,
     refreshToken:
       typeof tokenPayload.refresh_token === "string" && tokenPayload.refresh_token
@@ -349,6 +591,73 @@ async function ensureValidAccessToken({ config }) {
   return refreshAccessToken({ config, storedState });
 }
 
+function hasSufficientlyValidAccessToken(storedState, minimumLifetimeMs = 30_000) {
+  return (
+    Boolean(storedState?.accessToken) &&
+    Number(storedState?.accessTokenExpiresAt) > Date.now() + minimumLifetimeMs
+  );
+}
+
+async function ensureJustCalendarFolderForCurrentConnection({ accessToken = "", config } = {}) {
+  let storedState = readStoredAuthState();
+  let tokenToUse =
+    typeof accessToken === "string" && accessToken.trim()
+      ? accessToken.trim()
+      : hasSufficientlyValidAccessToken(storedState)
+        ? storedState.accessToken
+        : "";
+  if (!tokenToUse && config?.clientId && config?.clientSecret && storedState.refreshToken) {
+    const refreshResult = await refreshAccessTokenForNonCriticalTask({
+      config,
+      storedState,
+    });
+    if (refreshResult.ok) {
+      storedState = refreshResult.state;
+      tokenToUse = storedState.accessToken;
+    } else {
+      return {
+        ok: false,
+        error: "token_unavailable",
+        status: refreshResult.status || 401,
+        details: refreshResult.payload || {
+          message:
+            "No valid access token available for non-critical folder ensure. Login state is unchanged.",
+        },
+      };
+    }
+  }
+  if (!tokenToUse) {
+    return {
+      ok: false,
+      error: "token_unavailable",
+      status: 401,
+      details: {
+        message:
+          "No valid access token available for non-critical folder ensure. Login state is unchanged.",
+      },
+    };
+  }
+
+  const folderResult = await ensureJustCalendarFolder({
+    accessToken: tokenToUse,
+  });
+  if (!folderResult.ok) {
+    return folderResult;
+  }
+
+  const ensuredFolderId =
+    folderResult && typeof folderResult.folderId === "string" ? folderResult.folderId : "";
+  if (ensuredFolderId && ensuredFolderId !== storedState.driveFolderId) {
+    writeStoredAuthState({
+      ...storedState,
+      driveFolderId: ensuredFolderId,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  return folderResult;
+}
+
 function createGoogleAuthPlugin(config) {
   const googleConfig = {
     clientId: config.clientId,
@@ -374,26 +683,26 @@ function createGoogleAuthPlugin(config) {
     const state = randomBytes(24).toString("hex");
     rememberPendingState(state);
 
-    const authorizationUrl = new URL(GOOGLE_AUTH_URL);
-    authorizationUrl.searchParams.set("client_id", googleConfig.clientId);
-    authorizationUrl.searchParams.set("redirect_uri", redirectUri);
-    authorizationUrl.searchParams.set("response_type", "code");
-    authorizationUrl.searchParams.set("scope", GOOGLE_SCOPES);
-    authorizationUrl.searchParams.set("access_type", "offline");
-    authorizationUrl.searchParams.set("prompt", "consent");
-    authorizationUrl.searchParams.set("state", state);
+    const authorizationUrl = buildGoogleAuthorizationUrl({
+      clientId: googleConfig.clientId,
+      redirectUri,
+      state,
+    });
 
     const secureCookie = requestOrigin.startsWith("https://");
+    const cookieDomain =
+      getSharedCookieDomain(redirectUri) || getSharedCookieDomain(requestOrigin);
     res.statusCode = 302;
     res.setHeader(
       "Set-Cookie",
       buildCookie(OAUTH_STATE_COOKIE, state, {
         maxAgeSeconds: Math.floor(OAUTH_STATE_TTL_MS / 1000),
         secure: secureCookie,
+        domain: cookieDomain,
       }),
     );
     res.setHeader("Cache-Control", "no-store");
-    res.setHeader("Location", authorizationUrl.toString());
+    res.setHeader("Location", authorizationUrl);
     res.end();
   };
 
@@ -422,14 +731,18 @@ function createGoogleAuthPlugin(config) {
     const cookieState = parseCookies(req)[OAUTH_STATE_COOKIE] || "";
 
     const secureCookie = requestOrigin.startsWith("https://");
+    const cookieDomain =
+      getSharedCookieDomain(redirectUri) || getSharedCookieDomain(requestOrigin);
     const clearStateCookie = buildCookie(OAUTH_STATE_COOKIE, "", {
       maxAgeSeconds: 0,
       secure: secureCookie,
+      domain: cookieDomain,
     });
     const connectedCookie = buildCookie(OAUTH_CONNECTED_COOKIE, "1", {
       maxAgeSeconds: 60 * 60 * 24 * 30,
       httpOnly: false,
       secure: secureCookie,
+      domain: cookieDomain,
     });
 
     if (!state || !authorizationCode || !cookieState || cookieState !== state) {
@@ -507,14 +820,23 @@ function createGoogleAuthPlugin(config) {
         typeof tokenPayload.token_type === "string" && tokenPayload.token_type
           ? tokenPayload.token_type
           : "Bearer",
-      scope:
-        typeof tokenPayload.scope === "string" && tokenPayload.scope
-          ? tokenPayload.scope
-          : GOOGLE_SCOPES,
+      scope: mergeGoogleScopes(tokenPayload.scope, existingState.scope || GOOGLE_SCOPES),
       accessTokenExpiresAt,
       openIdSubject: openIdSubject || existingState.openIdSubject || "",
+      driveFolderId: existingState.driveFolderId || "",
       updatedAt: new Date().toISOString(),
     });
+
+    // Keep login-state update independent from Drive folder checks.
+    void ensureJustCalendarFolderForCurrentConnection({ accessToken, config: googleConfig })
+      .then((folderResult) => {
+        if (!folderResult.ok) {
+          console.warn("Google Drive folder ensure failed during login callback.", folderResult);
+        }
+      })
+      .catch((error) => {
+        console.warn("Google Drive folder ensure failed during login callback.", error);
+      });
 
     const redirectTarget =
       typeof googleConfig.postAuthRedirect === "string" && googleConfig.postAuthRedirect.trim()
@@ -532,13 +854,24 @@ function createGoogleAuthPlugin(config) {
     const storedState = readStoredAuthState();
     const hasValidAccessToken =
       Boolean(storedState.accessToken) && storedState.accessTokenExpiresAt > Date.now() + 30_000;
-    const isConnected = Boolean(storedState.refreshToken || hasValidAccessToken);
+    const hasIdentitySession = Boolean(storedState.refreshToken || hasValidAccessToken);
+    const hasDriveScope = hasGoogleScope(storedState.scope, GOOGLE_DRIVE_FILE_SCOPE);
+    const isConnected = hasIdentitySession;
+
+    if (isConnected && hasValidAccessToken && !storedState.driveFolderId) {
+      void ensureJustCalendarFolderForCurrentConnection({ config: googleConfig }).catch(() => {
+        // Folder creation is best-effort and should not block status checks.
+      });
+    }
 
     jsonResponse(res, 200, {
       connected: isConnected,
+      identityConnected: hasIdentitySession,
       profile: null,
-      openIdSubject: isConnected ? storedState.openIdSubject : "",
-      scopes: isConnected ? storedState.scope : "",
+      openIdSubject: hasIdentitySession ? storedState.openIdSubject : "",
+      scopes: hasIdentitySession ? storedState.scope : "",
+      driveScopeGranted: hasIdentitySession ? hasDriveScope : false,
+      driveFolderReady: hasIdentitySession ? Boolean(storedState.driveFolderId) : false,
       configured: Boolean(googleConfig.clientId && googleConfig.clientSecret),
     });
   };
@@ -568,10 +901,12 @@ function createGoogleAuthPlugin(config) {
     const storedState = readStoredAuthState();
     const requestOrigin = getRequestOrigin(req);
     const secureCookie = requestOrigin.startsWith("https://");
+    const cookieDomain = getSharedCookieDomain(requestOrigin);
     const clearConnectedCookie = buildCookie(OAUTH_CONNECTED_COOKIE, "", {
       maxAgeSeconds: 0,
       httpOnly: false,
       secure: secureCookie,
+      domain: cookieDomain,
     });
 
     const tokenToRevoke = storedState.refreshToken || storedState.accessToken;
@@ -592,6 +927,31 @@ function createGoogleAuthPlugin(config) {
     clearStoredAuthState();
     res.setHeader("Set-Cookie", clearConnectedCookie);
     jsonResponse(res, 200, { connected: false });
+  };
+
+  const handleEnsureFolder = async (res) => {
+    if (!ensureGoogleOAuthConfigured(googleConfig, res)) {
+      return;
+    }
+
+    const folderResult = await ensureJustCalendarFolderForCurrentConnection({
+      config: googleConfig,
+    });
+    if (!folderResult.ok) {
+      jsonResponse(res, Number(folderResult.status) || 502, {
+        ok: false,
+        error: folderResult.error || "ensure_folder_failed",
+        details: folderResult.details || null,
+      });
+      return;
+    }
+
+    jsonResponse(res, 200, {
+      ok: true,
+      created: Boolean(folderResult.created),
+      folderId:
+        folderResult && typeof folderResult.folderId === "string" ? folderResult.folderId : "",
+    });
   };
 
   const attachAuthRoutes = (middlewares) => {
@@ -642,6 +1002,15 @@ function createGoogleAuthPlugin(config) {
             return;
           }
           await handleDisconnect(req, res);
+          return;
+        }
+
+        if (requestUrl.pathname === "/api/auth/google/ensure-folder") {
+          if (req.method !== "POST") {
+            methodNotAllowed(res);
+            return;
+          }
+          await handleEnsureFolder(res);
           return;
         }
 
