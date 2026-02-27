@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="dark tokyo-night-storm">
+<html lang="en" class="dark tokyo-night-storm" data-auto_prompt="false">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -4215,6 +4215,8 @@
                       type="text"
                       placeholder="Calendar name"
                       autocomplete="off"
+                      data-1p-ignore="true"
+                      data-lpignore="true"
                     />
                   </label>
                   <label class="calendar-add-field" for="new-calendar-type-trigger">
@@ -4474,6 +4476,8 @@
                         type="text"
                         placeholder="Calendar name"
                         autocomplete="off"
+                        data-1p-ignore="true"
+                        data-lpignore="true"
                       />
                     </label>
                     <label
@@ -4637,6 +4641,8 @@
                         autocapitalize="off"
                         autocorrect="off"
                         spellcheck="false"
+                        data-1p-ignore="true"
+                        data-lpignore="true"
                       />
                     </label>
                     <div class="calendar-add-actions calendar-delete-actions">
@@ -4726,18 +4732,26 @@
             <button
               type="button"
               class="calendar-option profile-option"
-              data-profile-action="test-1"
-              aria-label="Test 1"
+              data-profile-action="save"
+              aria-label="Save"
             >
-              Test 1
+              Save
             </button>
             <button
               type="button"
               class="calendar-option profile-option"
-              data-profile-action="test-2"
-              aria-label="Test 2"
+              data-profile-action="load"
+              aria-label="Load"
             >
-              Test 2
+              Load
+            </button>
+            <button
+              type="button"
+              class="calendar-option profile-option"
+              data-profile-action="clear-all"
+              aria-label="Clear All"
+            >
+              Clear All
             </button>
           </div>
           <button
@@ -4774,6 +4788,8 @@
             max="3"
             step="0.05"
             value="3"
+            data-1p-ignore="true"
+            data-lpignore="true"
           />
           <output id="selection-camera-zoom-value" for="selection-camera-zoom"
             >3.00x</output
@@ -4788,6 +4804,8 @@
             max="3"
             step="0.05"
             value="2.6"
+            data-1p-ignore="true"
+            data-lpignore="true"
           />
           <output id="selection-expand-x-value" for="selection-expand-x"
             >2.60x</output
@@ -4802,6 +4820,8 @@
             max="3"
             step="0.05"
             value="2.6"
+            data-1p-ignore="true"
+            data-lpignore="true"
           />
           <output id="selection-expand-y-value" for="selection-expand-y"
             >2.60x</output
@@ -4816,6 +4836,8 @@
             max="100"
             step="0.05"
             value="25"
+            data-1p-ignore="true"
+            data-lpignore="true"
           />
           <output id="selection-fade-delta-value" for="selection-fade-delta"
             >25.00x</output

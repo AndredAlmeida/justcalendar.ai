@@ -544,6 +544,8 @@ function buildMonthCard(monthStart, getDayValueByKey, todayDayKey, calendarType)
             : SCORE_UNASSIGNED,
         );
         dayScoreSlider.setAttribute("aria-label", "Set day score");
+        dayScoreSlider.setAttribute("data-1p-ignore", "true");
+        dayScoreSlider.setAttribute("data-lpignore", "true");
 
         const dayScoreValue = document.createElement("span");
         dayScoreValue.className = "day-score-value";
@@ -560,6 +562,9 @@ function buildMonthCard(monthStart, getDayValueByKey, todayDayKey, calendarType)
         dayNoteInput.rows = 4;
         dayNoteInput.placeholder = "Write a note...";
         dayNoteInput.setAttribute("aria-label", "Write note for this day");
+        dayNoteInput.setAttribute("autocomplete", "off");
+        dayNoteInput.setAttribute("data-1p-ignore", "true");
+        dayNoteInput.setAttribute("data-lpignore", "true");
         dayNoteInput.value =
           normalizedCalendarType === CALENDAR_TYPE_NOTES
             ? normalizeDayNoteValue(dayValue)
