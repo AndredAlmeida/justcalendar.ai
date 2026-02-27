@@ -391,11 +391,16 @@
       }
 
       #profile-switcher.is-drive-connected #header-profile-btn {
-        border-color: color-mix(in srgb, var(--line) 42%, var(--score-slider-active) 58%);
+        border-color: color-mix(in srgb, var(--line) 62%, var(--score-slider-active) 38%);
+        background: linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--panel) 86%, var(--score-slider-active) 14%) 0%,
+          color-mix(in srgb, var(--panel) 95%, #ffffff 5%) 100%
+        );
         box-shadow:
-          0 3px 10px color-mix(in srgb, #0f172a 80%, transparent),
-          0 0 0 1px color-mix(in srgb, var(--score-slider-active) 36%, transparent),
-          0 0 12px color-mix(in srgb, var(--score-slider-active) 24%, transparent);
+          0 2px 8px color-mix(in srgb, #0f172a 84%, transparent),
+          0 0 0 1px color-mix(in srgb, var(--score-slider-active) 24%, transparent),
+          0 0 14px color-mix(in srgb, var(--score-slider-active) 22%, transparent);
       }
 
       .profile-user-icon {

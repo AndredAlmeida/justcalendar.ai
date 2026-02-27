@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 
 const OAUTH_STATE_COOKIE = "justcal_google_oauth_state";
+const OAUTH_CONNECTED_COOKIE = "justcal_google_connected";
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const TOKEN_STORE_PATH = resolve(process.cwd(), ".data/google-auth-store.json");
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -325,23 +326,23 @@ async function refreshAccessToken({ config, storedState }) {
 
 async function ensureValidAccessToken({ config }) {
   const storedState = readStoredAuthState();
-  if (!storedState.refreshToken) {
-    return {
-      ok: false,
-      status: 401,
-      payload: {
-        error: "not_connected",
-        message: "Google Drive is not connected.",
-      },
-    };
-  }
-
   const tokenIsStillValid =
     storedState.accessToken && storedState.accessTokenExpiresAt > Date.now() + 60_000;
   if (tokenIsStillValid) {
     return {
       ok: true,
       state: storedState,
+    };
+  }
+
+  if (!storedState.refreshToken) {
+    return {
+      ok: false,
+      status: 401,
+      payload: {
+        error: "not_connected",
+        message: "Google Drive session expired and no refresh token is available. Connect again.",
+      },
     };
   }
 
@@ -425,6 +426,11 @@ function createGoogleAuthPlugin(config) {
       maxAgeSeconds: 0,
       secure: secureCookie,
     });
+    const connectedCookie = buildCookie(OAUTH_CONNECTED_COOKIE, "1", {
+      maxAgeSeconds: 60 * 60 * 24 * 30,
+      httpOnly: false,
+      secure: secureCookie,
+    });
 
     if (!state || !authorizationCode || !cookieState || cookieState !== state) {
       res.setHeader("Set-Cookie", clearStateCookie);
@@ -471,23 +477,22 @@ function createGoogleAuthPlugin(config) {
     }
 
     const existingState = readStoredAuthState();
+    const accessToken =
+      typeof tokenPayload.access_token === "string" ? tokenPayload.access_token : "";
     const refreshToken =
       typeof tokenPayload.refresh_token === "string" && tokenPayload.refresh_token
         ? tokenPayload.refresh_token
         : existingState.refreshToken;
 
-    if (!refreshToken) {
+    if (!accessToken && !refreshToken) {
       res.setHeader("Set-Cookie", clearStateCookie);
       jsonResponse(res, 502, {
-        error: "missing_refresh_token",
-        message:
-          "Google did not return a refresh token. Ensure prompt=consent and remove prior grant before retrying.",
+        error: "missing_tokens",
+        message: "Google OAuth callback did not return usable tokens.",
       });
       return;
     }
 
-    const accessToken =
-      typeof tokenPayload.access_token === "string" ? tokenPayload.access_token : "";
     const expiresInSeconds = Number(tokenPayload.expires_in);
     const accessTokenExpiresAt =
       Number.isFinite(expiresInSeconds) && expiresInSeconds > 0
@@ -517,7 +522,7 @@ function createGoogleAuthPlugin(config) {
         : "/";
 
     res.statusCode = 302;
-    res.setHeader("Set-Cookie", clearStateCookie);
+    res.setHeader("Set-Cookie", [clearStateCookie, connectedCookie]);
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Location", redirectTarget);
     res.end();
@@ -525,7 +530,9 @@ function createGoogleAuthPlugin(config) {
 
   const handleStatus = (res) => {
     const storedState = readStoredAuthState();
-    const isConnected = Boolean(storedState.refreshToken);
+    const hasValidAccessToken =
+      Boolean(storedState.accessToken) && storedState.accessTokenExpiresAt > Date.now() + 30_000;
+    const isConnected = Boolean(storedState.refreshToken || hasValidAccessToken);
 
     jsonResponse(res, 200, {
       connected: isConnected,
@@ -557,8 +564,15 @@ function createGoogleAuthPlugin(config) {
     });
   };
 
-  const handleDisconnect = async (res) => {
+  const handleDisconnect = async (req, res) => {
     const storedState = readStoredAuthState();
+    const requestOrigin = getRequestOrigin(req);
+    const secureCookie = requestOrigin.startsWith("https://");
+    const clearConnectedCookie = buildCookie(OAUTH_CONNECTED_COOKIE, "", {
+      maxAgeSeconds: 0,
+      httpOnly: false,
+      secure: secureCookie,
+    });
 
     const tokenToRevoke = storedState.refreshToken || storedState.accessToken;
     if (tokenToRevoke) {
@@ -576,6 +590,7 @@ function createGoogleAuthPlugin(config) {
     }
 
     clearStoredAuthState();
+    res.setHeader("Set-Cookie", clearConnectedCookie);
     jsonResponse(res, 200, { connected: false });
   };
 
@@ -626,7 +641,7 @@ function createGoogleAuthPlugin(config) {
             methodNotAllowed(res);
             return;
           }
-          await handleDisconnect(res);
+          await handleDisconnect(req, res);
           return;
         }
 

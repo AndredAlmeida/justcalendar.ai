@@ -1022,9 +1022,25 @@ function setupProfileSwitcher({ switcher, button, options }) {
   const optionButtons = [...options.querySelectorAll("[data-profile-action]")];
   const googleDriveButton = options.querySelector('[data-profile-action="google-drive"]');
   const googleDriveLabel = options.querySelector("#profile-google-drive-label");
+  const GOOGLE_CONNECTED_COOKIE_NAME = "justcal_google_connected";
   let isGoogleDriveConnected = false;
   let isGoogleDriveConfigured = true;
   let googleSub = "";
+
+  const readCookieValue = (cookieName) => {
+    const escapedCookieName = cookieName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const cookieMatch = document.cookie.match(
+      new RegExp(`(?:^|;\\s*)${escapedCookieName}=([^;]*)`),
+    );
+    if (!cookieMatch) return "";
+    try {
+      return decodeURIComponent(cookieMatch[1] || "");
+    } catch {
+      return cookieMatch[1] || "";
+    }
+  };
+
+  const hasGoogleConnectedCookie = () => readCookieValue(GOOGLE_CONNECTED_COOKIE_NAME) === "1";
 
   const setGoogleDriveText = (nextLabel) => {
     if (googleDriveLabel) {
@@ -1108,6 +1124,13 @@ function setupProfileSwitcher({ switcher, button, options }) {
         configured: true,
         openIdSubject: "",
       });
+      if (hasGoogleConnectedCookie()) {
+        setGoogleDriveUiState({
+          connected: true,
+          configured: true,
+          openIdSubject: "",
+        });
+      }
     }
   };
 
@@ -1127,6 +1150,9 @@ function setupProfileSwitcher({ switcher, button, options }) {
   button.addEventListener("click", () => {
     const shouldExpand = !switcher.classList.contains("is-expanded");
     setExpanded(shouldExpand);
+    if (shouldExpand) {
+      void refreshGoogleDriveStatus();
+    }
   });
 
   optionButtons.forEach((optionButton) => {
@@ -1208,6 +1234,14 @@ function setupProfileSwitcher({ switcher, button, options }) {
     event.preventDefault();
     setExpanded(false, { focusButton: true });
   });
+
+  if (hasGoogleConnectedCookie()) {
+    setGoogleDriveUiState({
+      connected: true,
+      configured: true,
+      openIdSubject: "",
+    });
+  }
 
   refreshGoogleDriveStatus();
 }
