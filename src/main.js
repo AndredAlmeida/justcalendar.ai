@@ -1250,9 +1250,11 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
   const googleDriveLabel = options.querySelector("#profile-google-drive-label");
   const optionsDivider = options.querySelector(".calendar-options-divider");
   const driveBusyOverlay = document.getElementById("drive-busy-overlay");
+  const driveDirtyIndicator = document.getElementById("drive-dirty-indicator");
   const GOOGLE_CONNECTED_COOKIE_NAME = "justcal_google_connected";
   const GOOGLE_AUTH_LOG_PREFIX = "[JustCalendar][GoogleDriveAuth]";
   const BACKEND_CALL_LOG_PREFIX = "[JustCalendar][BackendCall]";
+  const LOCAL_CALENDAR_STORAGE_CHANGED_EVENT = "justcal:local-calendar-storage-changed";
   const GOOGLE_DRIVE_FILES_API_URL = "https://www.googleapis.com/drive/v3/files";
   const GOOGLE_DRIVE_UPLOAD_API_URL = "https://www.googleapis.com/upload/drive/v3/files";
   const GOOGLE_DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
@@ -1274,6 +1276,8 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
   const cachedDriveCalendarConfigById = new Map();
   const cachedDriveCalendarFileMetaById = new Map();
   const cachedDriveFileIdByName = new Map();
+  const baselineCalendarMetaSignatureById = new Map();
+  const baselineCalendarDaySignatureById = new Map();
 
   const logGoogleAuthMessage = (level, message, details) => {
     const logger = typeof console[level] === "function" ? console[level] : console.log;
@@ -2000,6 +2004,147 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
       nextObject[key] = canonicalizeJson(value[key]);
       return nextObject;
     }, {});
+  };
+
+  const toCanonicalSignature = (value) => {
+    return JSON.stringify(canonicalizeJson(value));
+  };
+
+  const readLocalDriveCalendarSignatures = () => {
+    const bootstrapPayload = buildDriveBootstrapPayload();
+    const calendars = Array.isArray(bootstrapPayload?.calendars) ? bootstrapPayload.calendars : [];
+    const signaturesByCalendarId = new Map();
+    calendars.forEach((rawCalendar) => {
+      if (!isObjectLike(rawCalendar)) {
+        return;
+      }
+      const calendarId =
+        typeof rawCalendar.id === "string" ? rawCalendar.id.trim() : "";
+      if (!calendarId) {
+        return;
+      }
+
+      const calendarType = normalizeBootstrapCalendarType(rawCalendar.type);
+      const calendarMetaPayload = {
+        id: calendarId,
+        name: normalizeBootstrapCalendarName(rawCalendar.name, "Calendar"),
+        type: calendarType,
+        color: normalizeCalendarColor(rawCalendar.color, DEFAULT_CALENDAR_COLOR),
+        pinned: Boolean(rawCalendar.pinned),
+        ...(calendarType === CALENDAR_TYPE_SCORE
+          ? { display: normalizeScoreDisplay(rawCalendar.display) }
+          : {}),
+      };
+      const calendarDayPayload = normalizeBootstrapCalendarDayEntries(rawCalendar.data);
+
+      signaturesByCalendarId.set(calendarId, {
+        meta: toCanonicalSignature(calendarMetaPayload),
+        day: toCanonicalSignature(calendarDayPayload),
+      });
+    });
+
+    const currentCalendarId =
+      typeof bootstrapPayload?.currentCalendarId === "string"
+        ? bootstrapPayload.currentCalendarId.trim()
+        : "";
+
+    return {
+      currentCalendarId,
+      signaturesByCalendarId,
+    };
+  };
+
+  const setCalendarDirtyIndicator = (isDirty) => {
+    if (!driveDirtyIndicator) {
+      return;
+    }
+    driveDirtyIndicator.classList.toggle("is-visible", Boolean(isDirty));
+    driveDirtyIndicator.setAttribute("aria-hidden", String(!isDirty));
+  };
+
+  const syncCalendarDirtyIndicator = () => {
+    if (!isGoogleDriveConfigured || !isGoogleDriveConnected) {
+      setCalendarDirtyIndicator(false);
+      return;
+    }
+    if (
+      baselineCalendarMetaSignatureById.size === 0 &&
+      baselineCalendarDaySignatureById.size === 0 &&
+      !hasBootstrappedDriveConfig
+    ) {
+      setCalendarDirtyIndicator(false);
+      return;
+    }
+
+    const { currentCalendarId, signaturesByCalendarId } = readLocalDriveCalendarSignatures();
+    const resolvedActiveCalendarId =
+      currentCalendarId && signaturesByCalendarId.has(currentCalendarId)
+        ? currentCalendarId
+        : signaturesByCalendarId.keys().next().value || "";
+    if (!resolvedActiveCalendarId) {
+      setCalendarDirtyIndicator(false);
+      return;
+    }
+
+    const currentSignatures = signaturesByCalendarId.get(resolvedActiveCalendarId);
+    if (!currentSignatures) {
+      setCalendarDirtyIndicator(false);
+      return;
+    }
+
+    const baselineMetaSignature = baselineCalendarMetaSignatureById.get(resolvedActiveCalendarId);
+    const baselineDaySignature = baselineCalendarDaySignatureById.get(resolvedActiveCalendarId);
+    const isMetaDirty =
+      typeof baselineMetaSignature !== "string" ||
+      baselineMetaSignature !== currentSignatures.meta;
+    const isDayDirty =
+      typeof baselineDaySignature !== "string" ||
+      baselineDaySignature !== currentSignatures.day;
+    setCalendarDirtyIndicator(isMetaDirty || isDayDirty);
+  };
+
+  const clearCalendarDriveDirtyBaselines = () => {
+    baselineCalendarMetaSignatureById.clear();
+    baselineCalendarDaySignatureById.clear();
+    syncCalendarDirtyIndicator();
+  };
+
+  const markAllCalendarsAsDriveCleanFromLocalState = () => {
+    const { signaturesByCalendarId } = readLocalDriveCalendarSignatures();
+    baselineCalendarMetaSignatureById.clear();
+    baselineCalendarDaySignatureById.clear();
+    signaturesByCalendarId.forEach((signatures, calendarId) => {
+      baselineCalendarMetaSignatureById.set(calendarId, signatures.meta);
+      baselineCalendarDaySignatureById.set(calendarId, signatures.day);
+    });
+    syncCalendarDirtyIndicator();
+  };
+
+  const markCalendarDayAsDriveCleanFromLocalState = (calendarId) => {
+    const { currentCalendarId, signaturesByCalendarId } = readLocalDriveCalendarSignatures();
+    const normalizedCalendarId = String(calendarId ?? "").trim();
+    const targetCalendarId =
+      normalizedCalendarId && signaturesByCalendarId.has(normalizedCalendarId)
+        ? normalizedCalendarId
+        : currentCalendarId && signaturesByCalendarId.has(currentCalendarId)
+          ? currentCalendarId
+          : "";
+    if (!targetCalendarId) {
+      syncCalendarDirtyIndicator();
+      return;
+    }
+
+    const signatures = signaturesByCalendarId.get(targetCalendarId);
+    if (!signatures) {
+      syncCalendarDirtyIndicator();
+      return;
+    }
+
+    if (!baselineCalendarMetaSignatureById.has(targetCalendarId)) {
+      baselineCalendarMetaSignatureById.set(targetCalendarId, signatures.meta);
+    }
+    baselineCalendarDaySignatureById.set(targetCalendarId, signatures.day);
+    syncCalendarDirtyIndicator();
   };
 
   const escapeDriveQueryValue = (value) => String(value ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
@@ -3602,6 +3747,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
       payload?.configSource === "existing" && isObjectLike(payload?.remoteState);
     if (shouldImportRemoteState) {
       const importedFromDrive = syncLocalStateFromDrive(payload);
+      markAllCalendarsAsDriveCleanFromLocalState();
       if (importedFromDrive) {
         hasBootstrappedDriveConfig = true;
         logGoogleAuthMessage(
@@ -3618,6 +3764,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
 
     hasBootstrappedDriveConfig = true;
     if (payload.created) {
+      markAllCalendarsAsDriveCleanFromLocalState();
       logGoogleAuthMessage(
         "info",
         "Created first-time justcalendar.json config in Google Drive.",
@@ -3648,6 +3795,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
         if (directBootstrapResult.ok && directBootstrapResult.handled) {
           syncDriveRuntimeCacheFromPayload(directBootstrapResult);
           hasBootstrappedDriveConfig = true;
+          markAllCalendarsAsDriveCleanFromLocalState();
           logGoogleAuthMessage(
             "info",
             "Created first-time justcalendar.json and calendar data files directly from browser.",
@@ -3720,6 +3868,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
 
         if (payload?.missing) {
           hasBootstrappedDriveConfig = false;
+          clearCalendarDriveDirtyBaselines();
           logGoogleAuthMessage("warn", missingLogMessage, payload);
           return {
             ok: true,
@@ -3731,6 +3880,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
 
         if (!isObjectLike(payload?.remoteState)) {
           hasBootstrappedDriveConfig = true;
+          syncCalendarDirtyIndicator();
           logGoogleAuthMessage("warn", noRemoteStateLogMessage, payload);
           return {
             ok: true,
@@ -3742,6 +3892,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
 
         const importedFromDrive = syncLocalStateFromDrive(payload);
         hasBootstrappedDriveConfig = true;
+        markAllCalendarsAsDriveCleanFromLocalState();
         if (importedFromDrive) {
           logGoogleAuthMessage("info", successLogMessage);
           if (typeof onDriveStateImported === "function") {
@@ -3796,6 +3947,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
     if (!connected) {
       hasBootstrappedDriveConfig = false;
       clearDriveRuntimeCache();
+      clearCalendarDriveDirtyBaselines();
     }
 
     if (!configured) {
@@ -3810,6 +3962,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
         googleDriveButton.setAttribute("aria-disabled", "true");
         googleDriveButton.removeAttribute("href");
       }
+      syncCalendarDirtyIndicator();
       return;
     }
 
@@ -3828,6 +3981,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
       if (googleDriveButton instanceof HTMLAnchorElement) {
         googleDriveButton.setAttribute("href", "#");
       }
+      syncCalendarDirtyIndicator();
       return;
     }
 
@@ -3841,6 +3995,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
     if (googleDriveButton instanceof HTMLAnchorElement) {
       googleDriveButton.setAttribute("href", "/api/auth/google/start");
     }
+    syncCalendarDirtyIndicator();
   };
 
   const refreshGoogleDriveStatus = async () => {
@@ -3951,6 +4106,12 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
 
   setExpanded(false);
 
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener(LOCAL_CALENDAR_STORAGE_CHANGED_EVENT, () => {
+      syncCalendarDirtyIndicator();
+    });
+  }
+
   button.addEventListener("click", () => {
     const shouldExpand = !switcher.classList.contains("is-expanded");
     setExpanded(shouldExpand);
@@ -4060,6 +4221,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
             );
           } else {
             syncDriveRuntimeCacheFromPayload(saveResult);
+            markAllCalendarsAsDriveCleanFromLocalState();
             saveOutcome = "success";
             logGoogleAuthMessage(
               "info",
@@ -4133,6 +4295,9 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
             );
           } else {
             syncDriveRuntimeCacheFromPayload(saveResult);
+            markCalendarDayAsDriveCleanFromLocalState(
+              saveResult?.currentCalendarId || saveResult?.calendar?.id || "",
+            );
             saveOutcome = "success";
             logGoogleAuthMessage(
               "info",
@@ -4252,6 +4417,9 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
             );
           } else {
             syncDriveRuntimeCacheFromPayload(loadResult);
+            markCalendarDayAsDriveCleanFromLocalState(
+              loadResult?.currentCalendarId || loadResult?.calendar?.id || "",
+            );
             logGoogleAuthMessage(
               "info",
               "Loaded current calendar data from Google Drive.",
@@ -4360,6 +4528,7 @@ function setupProfileSwitcher({ switcher, button, options, onDriveStateImported 
           );
           localStorage.setItem(CALENDAR_DAY_STATES_STORAGE_KEY, JSON.stringify({}));
           localStorage.removeItem(LEGACY_DAY_STATE_STORAGE_KEY);
+          clearCalendarDriveDirtyBaselines();
           logGoogleAuthMessage(
             "info",
             "Cleared local calendar data. Only Default Calendar (Check) remains.",

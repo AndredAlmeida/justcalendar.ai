@@ -36,6 +36,7 @@ export const DEFAULT_CAMERA_ZOOM = 3;
 
 const CALENDAR_DAY_STATES_STORAGE_KEY = "justcal-calendar-day-states";
 const LEGACY_DAY_STATE_STORAGE_KEY = "justcal-day-states";
+const LOCAL_CALENDAR_STORAGE_CHANGED_EVENT = "justcal:local-calendar-storage-changed";
 const DEFAULT_CALENDAR_ID = "energy-tracker";
 const DEFAULT_CALENDAR_COLOR = "blue";
 const CALENDAR_TYPE_SIGNAL = "signal-3";
@@ -284,6 +285,15 @@ function saveCalendarDayStates(dayStatesByCalendarId) {
       CALENDAR_DAY_STATES_STORAGE_KEY,
       JSON.stringify(dayStatesByCalendarId),
     );
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(
+        new CustomEvent(LOCAL_CALENDAR_STORAGE_CHANGED_EVENT, {
+          detail: {
+            key: CALENDAR_DAY_STATES_STORAGE_KEY,
+          },
+        }),
+      );
+    }
   } catch {
     // Ignore storage errors; buttons still work in-memory.
   }

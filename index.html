@@ -513,6 +513,7 @@
           0 2px 8px color-mix(in srgb, #0f172a 84%, transparent),
           0 0 0 1px color-mix(in srgb, var(--active-calendar-color) 24%, transparent),
           0 0 14px color-mix(in srgb, var(--active-calendar-color) 22%, transparent);
+        position: relative;
         cursor: pointer;
         transition:
           background-color 0.16s ease,
@@ -3470,6 +3471,25 @@
         transition: opacity 0.2s ease;
       }
 
+      #drive-dirty-indicator {
+        position: fixed;
+        left: max(0.62rem, env(safe-area-inset-left, 0px));
+        bottom: max(0.62rem, env(safe-area-inset-bottom, 0px));
+        width: 0.42rem;
+        height: 0.42rem;
+        border-radius: 999px;
+        background: #facc15;
+        box-shadow: 0 0 0 1px color-mix(in srgb, #0f172a 32%, transparent);
+        opacity: 0;
+        pointer-events: none;
+        z-index: 85;
+        transition: opacity 0.16s ease;
+      }
+
+      #drive-dirty-indicator.is-visible {
+        opacity: 1;
+      }
+
       #drive-busy-overlay.is-active {
         opacity: 1;
         pointer-events: auto;
@@ -5042,6 +5062,7 @@
         />
       </svg>
     </a>
+    <div id="drive-dirty-indicator" aria-hidden="true"></div>
     <div id="drive-busy-overlay" aria-hidden="true">
       <div
         class="drive-busy-wheel"

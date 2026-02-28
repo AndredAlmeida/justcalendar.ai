@@ -21,6 +21,7 @@ const CALENDAR_CLOSE_LABEL = "Close calendars";
 const CALENDAR_ID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const CALENDAR_ID_CHARSET_SIZE = CALENDAR_ID_ALPHABET.length;
 const CALENDAR_ID_LENGTH = 22;
+const LOCAL_CALENDAR_STORAGE_CHANGED_EVENT = "justcal:local-calendar-storage-changed";
 const CALENDAR_COLOR_HEX_BY_KEY = Object.freeze({
   green: "#22c55e",
   red: "#ef4444",
@@ -368,6 +369,15 @@ function saveCalendarsState({ calendars, activeCalendarId }) {
         calendars,
       }),
     );
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(
+        new CustomEvent(LOCAL_CALENDAR_STORAGE_CHANGED_EVENT, {
+          detail: {
+            key: CALENDARS_STORAGE_KEY,
+          },
+        }),
+      );
+    }
   } catch {
     // Ignore storage errors and keep behavior in-memory.
   }
