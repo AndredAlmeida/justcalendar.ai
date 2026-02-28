@@ -3813,29 +3813,38 @@ function createGoogleAuthPlugin(config) {
         }
 
         if (requestUrl.pathname === "/api/auth/google/bootstrap-config") {
-          if (req.method !== "POST") {
-            methodNotAllowed(res);
-            return;
-          }
-          await handleBootstrapConfig(req, res);
+          jsonResponse(res, 410, {
+            ok: false,
+            error: "backend_json_writes_disabled",
+            details: {
+              message:
+                "Backend JSON creation is disabled. Create justcalendar.json and calendar data files from browser code only.",
+            },
+          });
           return;
         }
 
         if (requestUrl.pathname === "/api/auth/google/save-state") {
-          if (req.method !== "POST") {
-            methodNotAllowed(res);
-            return;
-          }
-          await handleSaveState(req, res);
+          jsonResponse(res, 410, {
+            ok: false,
+            error: "backend_json_writes_disabled",
+            details: {
+              message:
+                "Backend JSON creation is disabled. Save state directly from browser code.",
+            },
+          });
           return;
         }
 
         if (requestUrl.pathname === "/api/auth/google/save-current-calendar-state") {
-          if (req.method !== "POST") {
-            methodNotAllowed(res);
-            return;
-          }
-          await handleSaveCurrentCalendarState(req, res);
+          jsonResponse(res, 410, {
+            ok: false,
+            error: "backend_json_writes_disabled",
+            details: {
+              message:
+                "Backend JSON creation is disabled. Save current calendar directly from browser code.",
+            },
+          });
           return;
         }
 
