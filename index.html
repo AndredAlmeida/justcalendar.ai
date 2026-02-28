@@ -2151,9 +2151,15 @@
 
       #profile-options .profile-account-option {
         min-height: 2.05rem;
-        cursor: default;
-        pointer-events: none;
+        cursor: pointer;
+        pointer-events: auto;
         opacity: 0.9;
+      }
+
+      #profile-options .profile-account-option:hover,
+      #profile-options .profile-account-option:focus-visible {
+        background: color-mix(in srgb, var(--line) 10%, transparent);
+        outline: none;
       }
 
       #profile-options .profile-account-option.is-current {

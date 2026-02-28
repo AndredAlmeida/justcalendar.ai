@@ -1485,6 +1485,27 @@ function extractBootstrapBundleFromPersistedConfig(rawConfigPayload) {
   };
 }
 
+function extractAccountSummariesFromPersistedConfig(rawConfigPayload) {
+  if (!isObjectRecord(rawConfigPayload)) {
+    return {};
+  }
+  const rawAccounts = isObjectRecord(rawConfigPayload.accounts) ? rawConfigPayload.accounts : {};
+  const accountSummaries = {};
+
+  for (const [rawAccountId, rawAccountRecord] of Object.entries(rawAccounts)) {
+    const accountId = normalizeIncomingAccountId(rawAccountId);
+    if (!accountId || !isObjectRecord(rawAccountRecord)) {
+      continue;
+    }
+    accountSummaries[accountId] = {
+      id: accountId,
+      name: normalizeBootstrapCalendarName(rawAccountRecord.name, DEFAULT_BOOTSTRAP_ACCOUNT_NAME),
+    };
+  }
+
+  return accountSummaries;
+}
+
 function buildCalendarDataLookupMaps(calendars = []) {
   const calendarDataById = new Map();
   const calendarDataByName = new Map();
@@ -2688,6 +2709,7 @@ async function loadJustCalendarStateForCurrentConnection({ accessToken = "", con
       },
     };
   }
+  const accountSummaries = extractAccountSummariesFromPersistedConfig(readConfigResult.payload);
 
   const responseCalendars = extractedBootstrapBundle.calendars.map((calendar) => ({
     id: calendar.id,
@@ -2781,6 +2803,8 @@ async function loadJustCalendarStateForCurrentConnection({ accessToken = "", con
     fileId: resolvedConfigFileId || "",
     accountId: extractedBootstrapBundle.accountId || "",
     account: extractedBootstrapBundle.accountName || DEFAULT_BOOTSTRAP_ACCOUNT_NAME,
+    "current-account-id": extractedBootstrapBundle.accountId || "",
+    accounts: accountSummaries,
     currentCalendarId: activeCalendarId,
     selectedTheme,
     calendars: withResolvedFileIdCalendars,
@@ -3744,6 +3768,11 @@ function createGoogleAuthPlugin(config) {
       fileName: JUSTCALENDAR_CONFIG_FILE_NAME,
       accountId: loadResult.accountId || "",
       account: loadResult.account || DEFAULT_BOOTSTRAP_ACCOUNT_NAME,
+      "current-account-id":
+        typeof loadResult["current-account-id"] === "string"
+          ? loadResult["current-account-id"]
+          : loadResult.accountId || "",
+      accounts: isObjectRecord(loadResult.accounts) ? loadResult.accounts : {},
       currentCalendarId: loadResult.currentCalendarId || "",
       selectedTheme: loadResult.selectedTheme || DEFAULT_BOOTSTRAP_THEME,
       calendars: Array.isArray(loadResult.calendars) ? loadResult.calendars : [],
