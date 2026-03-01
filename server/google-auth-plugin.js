@@ -4,7 +4,9 @@ import { randomBytes } from "node:crypto";
 
 const OAUTH_STATE_COOKIE = "justcal_google_oauth_state";
 const OAUTH_CONNECTED_COOKIE = "justcal_google_connected";
+const OAUTH_SESSION_COOKIE = "justcal_google_sid";
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+const OAUTH_SESSION_TTL_SECONDS = 60 * 60 * 24 * 365;
 const TOKEN_STORE_PATH = resolve(process.cwd(), ".data/google-auth-store.json");
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -62,10 +64,11 @@ const SUPPORTED_BOOTSTRAP_THEMES = new Set([
   "solarized-light",
 ]);
 const DRIVE_DATA_LOAD_CONCURRENCY = 5;
+const OAUTH_SESSION_ID_PATTERN = /^[a-f0-9]{32,128}$/;
 
 const pendingStates = new Map();
-let inFlightEnsureFolderPromise = null;
-let inFlightEnsureConfigPromise = null;
+const inFlightEnsureFolderPromiseBySession = new Map();
+const inFlightEnsureConfigPromiseBySession = new Map();
 
 function parseCookies(req) {
   const headerValue = req.headers?.cookie;
@@ -179,6 +182,80 @@ function getSharedCookieDomain(requestOrigin) {
     // Ignore parse failures and fall back to host-only cookies.
   }
   return "";
+}
+
+function normalizeSessionId(rawSessionId) {
+  const sessionId = typeof rawSessionId === "string" ? rawSessionId.trim().toLowerCase() : "";
+  if (!sessionId) {
+    return "";
+  }
+  return OAUTH_SESSION_ID_PATTERN.test(sessionId) ? sessionId : "";
+}
+
+function createSessionId() {
+  return randomBytes(24).toString("hex");
+}
+
+function getSessionIdFromRequest(req) {
+  const sessionIdFromCookie = parseCookies(req)[OAUTH_SESSION_COOKIE] || "";
+  return normalizeSessionId(sessionIdFromCookie);
+}
+
+function buildSessionCookie(sessionId, { secure = false, domain = "" } = {}) {
+  return buildCookie(OAUTH_SESSION_COOKIE, sessionId, {
+    maxAgeSeconds: OAUTH_SESSION_TTL_SECONDS,
+    httpOnly: true,
+    secure,
+    domain,
+  });
+}
+
+function appendSetCookieHeader(res, cookieValue) {
+  if (!cookieValue) {
+    return;
+  }
+  const existingHeader = res.getHeader("Set-Cookie");
+  if (!existingHeader) {
+    res.setHeader("Set-Cookie", cookieValue);
+    return;
+  }
+  if (Array.isArray(existingHeader)) {
+    res.setHeader("Set-Cookie", [...existingHeader, cookieValue]);
+    return;
+  }
+  res.setHeader("Set-Cookie", [String(existingHeader), cookieValue]);
+}
+
+function ensureRequestSession(
+  req,
+  res,
+  { requestOrigin = "", createIfMissing = true, cookieDomain = "" } = {},
+) {
+  const existingSessionId = getSessionIdFromRequest(req);
+  if (existingSessionId) {
+    return existingSessionId;
+  }
+  if (!createIfMissing) {
+    return "";
+  }
+
+  const createdSessionId = createSessionId();
+  const secureCookie =
+    typeof requestOrigin === "string" && requestOrigin
+      ? requestOrigin.startsWith("https://")
+      : false;
+  const resolvedCookieDomain =
+    typeof cookieDomain === "string" && cookieDomain.trim()
+      ? cookieDomain.trim()
+      : getSharedCookieDomain(requestOrigin);
+  appendSetCookieHeader(
+    res,
+    buildSessionCookie(createdSessionId, {
+      secure: secureCookie,
+      domain: resolvedCookieDomain,
+    }),
+  );
+  return createdSessionId;
 }
 
 function escapeDriveQueryValue(value) {
@@ -836,42 +913,151 @@ function normalizeStoredAuthState(rawState) {
   };
 }
 
-function readStoredAuthState() {
+function hasStoredAuthCredentials(storedAuthState) {
+  return Boolean(storedAuthState?.refreshToken || storedAuthState?.accessToken);
+}
+
+function normalizeStoredAuthSessions(rawSessions) {
+  if (!rawSessions || typeof rawSessions !== "object" || Array.isArray(rawSessions)) {
+    return {};
+  }
+  const normalizedSessions = {};
+  Object.entries(rawSessions).forEach(([rawSessionId, rawSessionState]) => {
+    const normalizedSessionId = normalizeSessionId(rawSessionId);
+    if (!normalizedSessionId) {
+      return;
+    }
+    const normalizedState = normalizeStoredAuthState(rawSessionState);
+    if (!hasStoredAuthCredentials(normalizedState)) {
+      return;
+    }
+    normalizedSessions[normalizedSessionId] = normalizedState;
+  });
+  return normalizedSessions;
+}
+
+function normalizeStoredAuthStore(rawStore) {
+  const storeObject = rawStore && typeof rawStore === "object" && !Array.isArray(rawStore) ? rawStore : {};
+  const hasSessionMap = storeObject.sessions && typeof storeObject.sessions === "object" && !Array.isArray(storeObject.sessions);
+  const sessions = hasSessionMap ? normalizeStoredAuthSessions(storeObject.sessions) : {};
+  const legacyState = hasSessionMap ? normalizeStoredAuthState({}) : normalizeStoredAuthState(storeObject);
+  const updatedAt =
+    typeof storeObject.updatedAt === "string" && storeObject.updatedAt.trim()
+      ? storeObject.updatedAt.trim()
+      : new Date(0).toISOString();
+  return {
+    version: 2,
+    sessions,
+    legacyState,
+    updatedAt,
+  };
+}
+
+function readStoredAuthStore() {
   if (!existsSync(TOKEN_STORE_PATH)) {
-    return normalizeStoredAuthState({});
+    return normalizeStoredAuthStore({});
   }
 
   try {
     const fileContents = readFileSync(TOKEN_STORE_PATH, "utf8");
     if (!fileContents.trim()) {
-      return normalizeStoredAuthState({});
+      return normalizeStoredAuthStore({});
     }
     const parsed = JSON.parse(fileContents);
-    return normalizeStoredAuthState(parsed);
+    return normalizeStoredAuthStore(parsed);
   } catch {
-    return normalizeStoredAuthState({});
+    return normalizeStoredAuthStore({});
   }
 }
 
-function writeStoredAuthState(nextState) {
-  const normalizedState = normalizeStoredAuthState(nextState);
+function writeStoredAuthStore(storeState) {
+  const normalizedSessions = normalizeStoredAuthSessions(storeState?.sessions);
+  const normalizedStore = {
+    version: 2,
+    sessions: normalizedSessions,
+    updatedAt:
+      typeof storeState?.updatedAt === "string" && storeState.updatedAt.trim()
+        ? storeState.updatedAt.trim()
+        : new Date().toISOString(),
+  };
   mkdirSync(dirname(TOKEN_STORE_PATH), { recursive: true });
 
   // Production hardening note:
   // - move this file to encrypted-at-rest storage or a managed secrets store
-  // - scope storage per-user/session instead of single shared local state
-  writeFileSync(TOKEN_STORE_PATH, `${JSON.stringify(normalizedState, null, 2)}\n`, "utf8");
+  // - this now stores per-session auth state and should be migrated to a shared DB for multi-instance deployments
+  writeFileSync(TOKEN_STORE_PATH, `${JSON.stringify(normalizedStore, null, 2)}\n`, "utf8");
   try {
     chmodSync(TOKEN_STORE_PATH, 0o600);
   } catch {
     // Best-effort permission hardening.
   }
+  return normalizedStore;
+}
 
+function readStoredAuthState(sessionId = "") {
+  const normalizedSessionId = normalizeSessionId(sessionId);
+  if (!normalizedSessionId) {
+    return normalizeStoredAuthState({});
+  }
+
+  const store = readStoredAuthStore();
+  const sessionState = store.sessions[normalizedSessionId];
+  if (sessionState) {
+    return normalizeStoredAuthState(sessionState);
+  }
+
+  // One-time migration path from legacy single-state storage:
+  // if no session entry exists but legacy credentials exist, adopt them for this session.
+  if (hasStoredAuthCredentials(store.legacyState)) {
+    const nextSessions = {
+      ...store.sessions,
+      [normalizedSessionId]: normalizeStoredAuthState(store.legacyState),
+    };
+    const nextStore = writeStoredAuthStore({
+      sessions: nextSessions,
+      updatedAt: new Date().toISOString(),
+    });
+    return normalizeStoredAuthState(nextStore.sessions[normalizedSessionId]);
+  }
+
+  return normalizeStoredAuthState({});
+}
+
+function writeStoredAuthState(sessionId = "", nextState = {}) {
+  const normalizedSessionId = normalizeSessionId(sessionId);
+  if (!normalizedSessionId) {
+    return normalizeStoredAuthState({});
+  }
+  const store = readStoredAuthStore();
+  const normalizedState = normalizeStoredAuthState(nextState);
+  const nextSessions = {
+    ...store.sessions,
+    [normalizedSessionId]: normalizedState,
+  };
+  writeStoredAuthStore({
+    sessions: nextSessions,
+    updatedAt: new Date().toISOString(),
+  });
   return normalizedState;
 }
 
-function clearStoredAuthState() {
-  return writeStoredAuthState({});
+function clearStoredAuthState(sessionId = "") {
+  const normalizedSessionId = normalizeSessionId(sessionId);
+  if (!normalizedSessionId) {
+    return normalizeStoredAuthState({});
+  }
+  const store = readStoredAuthStore();
+  const existingState = normalizeStoredAuthState(store.sessions[normalizedSessionId]);
+  if (!store.sessions[normalizedSessionId]) {
+    return existingState;
+  }
+  const nextSessions = { ...store.sessions };
+  delete nextSessions[normalizedSessionId];
+  writeStoredAuthStore({
+    sessions: nextSessions,
+    updatedAt: new Date().toISOString(),
+  });
+  return existingState;
 }
 
 function jsonResponse(res, statusCode, payload) {
@@ -887,26 +1073,50 @@ function methodNotAllowed(res) {
 
 function cleanupExpiredPendingStates() {
   const now = Date.now();
-  for (const [state, expiresAt] of pendingStates.entries()) {
-    if (expiresAt <= now) {
+  for (const [state, pendingStateRecord] of pendingStates.entries()) {
+    const expiresAt =
+      pendingStateRecord && typeof pendingStateRecord === "object"
+        ? Number(pendingStateRecord.expiresAt)
+        : Number(pendingStateRecord);
+    if (!Number.isFinite(expiresAt) || expiresAt <= now) {
       pendingStates.delete(state);
     }
   }
 }
 
-function rememberPendingState(state) {
+function rememberPendingState(state, sessionId = "") {
   cleanupExpiredPendingStates();
-  pendingStates.set(state, Date.now() + OAUTH_STATE_TTL_MS);
+  pendingStates.set(state, {
+    expiresAt: Date.now() + OAUTH_STATE_TTL_MS,
+    sessionId: normalizeSessionId(sessionId),
+  });
 }
 
-function consumePendingState(state) {
+function consumePendingState(state, sessionId = "") {
   cleanupExpiredPendingStates();
-  const expiresAt = pendingStates.get(state);
-  if (!expiresAt) {
+  const pendingStateRecord = pendingStates.get(state);
+  if (!pendingStateRecord) {
     return false;
   }
   pendingStates.delete(state);
-  return expiresAt > Date.now();
+
+  const expiresAt =
+    pendingStateRecord && typeof pendingStateRecord === "object"
+      ? Number(pendingStateRecord.expiresAt)
+      : Number(pendingStateRecord);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    return false;
+  }
+
+  const expectedSessionId =
+    pendingStateRecord && typeof pendingStateRecord === "object"
+      ? normalizeSessionId(pendingStateRecord.sessionId)
+      : "";
+  const receivedSessionId = normalizeSessionId(sessionId);
+  if (expectedSessionId && expectedSessionId !== receivedSessionId) {
+    return false;
+  }
+  return true;
 }
 
 function getRedirectUri({ requestOrigin, configuredRedirectUri }) {
@@ -1940,12 +2150,13 @@ function injectDataFileIdsIntoConfigPayload(
 async function ensureJustCalendarConfigForCurrentConnection({
   accessToken = "",
   config,
+  sessionId = "",
   configPayload = {},
   bootstrapBundle = null,
   allowCreateIfMissing = true,
   ensureDataFiles = true,
 } = {}) {
-  let storedState = readStoredAuthState();
+  let storedState = readStoredAuthState(sessionId);
   if (!hasGoogleScope(storedState.scope, GOOGLE_DRIVE_FILE_SCOPE)) {
     return {
       ok: false,
@@ -1958,16 +2169,18 @@ async function ensureJustCalendarConfigForCurrentConnection({
     };
   }
 
-  if (inFlightEnsureConfigPromise) {
-    return inFlightEnsureConfigPromise;
+  const inFlightKey = normalizeSessionId(sessionId) || "default";
+  if (inFlightEnsureConfigPromiseBySession.has(inFlightKey)) {
+    return inFlightEnsureConfigPromiseBySession.get(inFlightKey);
   }
 
-  inFlightEnsureConfigPromise = (async () => {
-    let freshState = readStoredAuthState();
+  const nextInFlightPromise = (async () => {
+    let freshState = readStoredAuthState(sessionId);
 
     const folderResult = await ensureJustCalendarFolderForCurrentConnection({
       accessToken,
       config,
+      sessionId,
     });
     if (!folderResult.ok) {
       return folderResult;
@@ -1992,6 +2205,7 @@ async function ensureJustCalendarConfigForCurrentConnection({
       const refreshResult = await refreshAccessTokenForNonCriticalTask({
         config,
         storedState: freshState,
+        sessionId,
       });
       if (refreshResult.ok) {
         freshState = refreshResult.state;
@@ -2096,7 +2310,7 @@ async function ensureJustCalendarConfigForCurrentConnection({
     }
 
     if (configFileId && configFileId !== freshState.configFileId) {
-      writeStoredAuthState({
+      writeStoredAuthState(sessionId, {
         ...freshState,
         driveFolderId: folderId || freshState.driveFolderId || "",
         configFileId,
@@ -2213,20 +2427,22 @@ async function ensureJustCalendarConfigForCurrentConnection({
       dataFiles: Array.isArray(dataFilesResult.files) ? dataFilesResult.files : [],
     };
   })();
+  inFlightEnsureConfigPromiseBySession.set(inFlightKey, nextInFlightPromise);
 
   try {
-    return await inFlightEnsureConfigPromise;
+    return await nextInFlightPromise;
   } finally {
-    inFlightEnsureConfigPromise = null;
+    inFlightEnsureConfigPromiseBySession.delete(inFlightKey);
   }
 }
 
 async function saveJustCalendarStateForCurrentConnection({
   accessToken = "",
   config,
+  sessionId = "",
   bootstrapBundle = null,
 } = {}) {
-  const storedState = readStoredAuthState();
+  const storedState = readStoredAuthState(sessionId);
   if (!hasGoogleScope(storedState.scope, GOOGLE_DRIVE_FILE_SCOPE)) {
     return {
       ok: false,
@@ -2250,6 +2466,7 @@ async function saveJustCalendarStateForCurrentConnection({
   const folderResult = await ensureJustCalendarFolderForCurrentConnection({
     accessToken,
     config,
+    sessionId,
   });
   if (!folderResult.ok) {
     return folderResult;
@@ -2349,8 +2566,8 @@ async function saveJustCalendarStateForCurrentConnection({
     }
   }
 
-  const latestState = readStoredAuthState();
-  writeStoredAuthState({
+  const latestState = readStoredAuthState(sessionId);
+  writeStoredAuthState(sessionId, {
     ...latestState,
     driveFolderId: folderId || latestState.driveFolderId || "",
     configFileId: upsertConfigResult.fileId || latestState.configFileId || "",
@@ -2424,9 +2641,10 @@ async function saveJustCalendarStateForCurrentConnection({
 async function saveCurrentCalendarStateForCurrentConnection({
   accessToken = "",
   config,
+  sessionId = "",
   bootstrapBundle = null,
 } = {}) {
-  const storedState = readStoredAuthState();
+  const storedState = readStoredAuthState(sessionId);
   if (!hasGoogleScope(storedState.scope, GOOGLE_DRIVE_FILE_SCOPE)) {
     return {
       ok: false,
@@ -2480,6 +2698,7 @@ async function saveCurrentCalendarStateForCurrentConnection({
   const loadResult = await loadJustCalendarStateForCurrentConnection({
     accessToken,
     config,
+    sessionId,
   });
   if (!loadResult.ok) {
     return loadResult;
@@ -2613,8 +2832,12 @@ async function saveCurrentCalendarStateForCurrentConnection({
   };
 }
 
-async function loadJustCalendarStateForCurrentConnection({ accessToken = "", config } = {}) {
-  const storedState = readStoredAuthState();
+async function loadJustCalendarStateForCurrentConnection({
+  accessToken = "",
+  config,
+  sessionId = "",
+} = {}) {
+  const storedState = readStoredAuthState(sessionId);
   if (!hasGoogleScope(storedState.scope, GOOGLE_DRIVE_FILE_SCOPE)) {
     return {
       ok: false,
@@ -2630,6 +2853,7 @@ async function loadJustCalendarStateForCurrentConnection({ accessToken = "", con
   const folderResult = await ensureJustCalendarFolderForCurrentConnection({
     accessToken,
     config,
+    sessionId,
   });
   if (!folderResult.ok) {
     return folderResult;
@@ -2788,8 +3012,8 @@ async function loadJustCalendarStateForCurrentConnection({ accessToken = "", con
       ? requestedCurrentCalendarId
       : firstCalendarId;
 
-  const latestState = readStoredAuthState();
-  writeStoredAuthState({
+  const latestState = readStoredAuthState(sessionId);
+  writeStoredAuthState(sessionId, {
     ...latestState,
     driveFolderId: folderId || latestState.driveFolderId || "",
     configFileId: resolvedConfigFileId || latestState.configFileId || "",
@@ -2821,7 +3045,7 @@ async function loadJustCalendarStateForCurrentConnection({ accessToken = "", con
   };
 }
 
-async function refreshAccessToken({ config, storedState }) {
+async function refreshAccessToken({ config, storedState, sessionId = "" }) {
   if (!storedState.refreshToken) {
     return {
       ok: false,
@@ -2850,7 +3074,7 @@ async function refreshAccessToken({ config, storedState }) {
 
   if (!tokenResponse.ok) {
     if (tokenPayload?.error === "invalid_grant") {
-      clearStoredAuthState();
+      clearStoredAuthState(sessionId);
       return {
         ok: false,
         status: 401,
@@ -2891,9 +3115,9 @@ async function refreshAccessToken({ config, storedState }) {
     };
   }
 
-    const nextState = writeStoredAuthState({
-      ...storedState,
-      accessToken: nextAccessToken,
+  const nextState = writeStoredAuthState(sessionId, {
+    ...storedState,
+    accessToken: nextAccessToken,
     tokenType:
       typeof tokenPayload.token_type === "string" && tokenPayload.token_type
         ? tokenPayload.token_type
@@ -2914,7 +3138,7 @@ async function refreshAccessToken({ config, storedState }) {
   };
 }
 
-async function refreshAccessTokenForNonCriticalTask({ config, storedState }) {
+async function refreshAccessTokenForNonCriticalTask({ config, storedState, sessionId = "" }) {
   if (!storedState.refreshToken) {
     return {
       ok: false,
@@ -2976,7 +3200,7 @@ async function refreshAccessTokenForNonCriticalTask({ config, storedState }) {
     };
   }
 
-  const nextState = writeStoredAuthState({
+  const nextState = writeStoredAuthState(sessionId, {
     ...storedState,
     accessToken: nextAccessToken,
     tokenType:
@@ -2999,8 +3223,8 @@ async function refreshAccessTokenForNonCriticalTask({ config, storedState }) {
   };
 }
 
-async function ensureValidAccessToken({ config }) {
-  const storedState = readStoredAuthState();
+async function ensureValidAccessToken({ config, sessionId = "" }) {
+  const storedState = readStoredAuthState(sessionId);
   const tokenIsStillValid =
     storedState.accessToken && storedState.accessTokenExpiresAt > Date.now() + 60_000;
   if (tokenIsStillValid) {
@@ -3021,7 +3245,7 @@ async function ensureValidAccessToken({ config }) {
     };
   }
 
-  return refreshAccessToken({ config, storedState });
+  return refreshAccessToken({ config, storedState, sessionId });
 }
 
 function hasSufficientlyValidAccessToken(storedState, minimumLifetimeMs = 30_000) {
@@ -3031,8 +3255,12 @@ function hasSufficientlyValidAccessToken(storedState, minimumLifetimeMs = 30_000
   );
 }
 
-async function ensureJustCalendarFolderForCurrentConnection({ accessToken = "", config } = {}) {
-  let storedState = readStoredAuthState();
+async function ensureJustCalendarFolderForCurrentConnection({
+  accessToken = "",
+  config,
+  sessionId = "",
+} = {}) {
+  let storedState = readStoredAuthState(sessionId);
   if (!hasGoogleScope(storedState.scope, GOOGLE_DRIVE_FILE_SCOPE)) {
     return {
       ok: false,
@@ -3053,12 +3281,13 @@ async function ensureJustCalendarFolderForCurrentConnection({ accessToken = "", 
     };
   }
 
-  if (inFlightEnsureFolderPromise) {
-    return inFlightEnsureFolderPromise;
+  const inFlightKey = normalizeSessionId(sessionId) || "default";
+  if (inFlightEnsureFolderPromiseBySession.has(inFlightKey)) {
+    return inFlightEnsureFolderPromiseBySession.get(inFlightKey);
   }
 
-  inFlightEnsureFolderPromise = (async () => {
-    let freshState = readStoredAuthState();
+  const nextInFlightPromise = (async () => {
+    let freshState = readStoredAuthState(sessionId);
     if (freshState.driveFolderId) {
       return {
         ok: true,
@@ -3077,6 +3306,7 @@ async function ensureJustCalendarFolderForCurrentConnection({ accessToken = "", 
       const refreshResult = await refreshAccessTokenForNonCriticalTask({
         config,
         storedState: freshState,
+        sessionId,
       });
       if (refreshResult.ok) {
         freshState = refreshResult.state;
@@ -3113,7 +3343,7 @@ async function ensureJustCalendarFolderForCurrentConnection({ accessToken = "", 
         const remainingScopes = Array.from(parseScopeSet(freshState.scope)).filter(
           (scopeValue) => scopeValue !== GOOGLE_DRIVE_FILE_SCOPE,
         );
-      writeStoredAuthState({
+      writeStoredAuthState(sessionId, {
         ...freshState,
         scope: remainingScopes.join(" ").trim(),
         driveFolderId: "",
@@ -3127,7 +3357,7 @@ async function ensureJustCalendarFolderForCurrentConnection({ accessToken = "", 
     const ensuredFolderId =
       folderResult && typeof folderResult.folderId === "string" ? folderResult.folderId : "";
     if (ensuredFolderId && ensuredFolderId !== freshState.driveFolderId) {
-      writeStoredAuthState({
+      writeStoredAuthState(sessionId, {
         ...freshState,
         driveFolderId: ensuredFolderId,
         updatedAt: new Date().toISOString(),
@@ -3136,11 +3366,12 @@ async function ensureJustCalendarFolderForCurrentConnection({ accessToken = "", 
 
     return folderResult;
   })();
+  inFlightEnsureFolderPromiseBySession.set(inFlightKey, nextInFlightPromise);
 
   try {
-    return await inFlightEnsureFolderPromise;
+    return await nextInFlightPromise;
   } finally {
-    inFlightEnsureFolderPromise = null;
+    inFlightEnsureFolderPromiseBySession.delete(inFlightKey);
   }
 }
 
@@ -3165,9 +3396,17 @@ function createGoogleAuthPlugin(config) {
       requestOrigin,
       configuredRedirectUri: googleConfig.redirectUri,
     });
+    const secureCookie = requestOrigin.startsWith("https://");
+    const cookieDomain =
+      getSharedCookieDomain(redirectUri) || getSharedCookieDomain(requestOrigin);
+    const sessionId = ensureRequestSession(req, res, {
+      requestOrigin,
+      createIfMissing: true,
+      cookieDomain,
+    });
 
     const state = randomBytes(24).toString("hex");
-    rememberPendingState(state);
+    rememberPendingState(state, sessionId);
 
     const authorizationUrl = buildGoogleAuthorizationUrl({
       clientId: googleConfig.clientId,
@@ -3175,12 +3414,9 @@ function createGoogleAuthPlugin(config) {
       state,
     });
 
-    const secureCookie = requestOrigin.startsWith("https://");
-    const cookieDomain =
-      getSharedCookieDomain(redirectUri) || getSharedCookieDomain(requestOrigin);
     res.statusCode = 302;
-    res.setHeader(
-      "Set-Cookie",
+    appendSetCookieHeader(
+      res,
       buildCookie(OAUTH_STATE_COOKIE, state, {
         maxAgeSeconds: Math.floor(OAUTH_STATE_TTL_MS / 1000),
         secure: secureCookie,
@@ -3212,13 +3448,17 @@ function createGoogleAuthPlugin(config) {
       return;
     }
 
-    const state = url.searchParams.get("state") || "";
-    const authorizationCode = url.searchParams.get("code") || "";
-    const cookieState = parseCookies(req)[OAUTH_STATE_COOKIE] || "";
-
     const secureCookie = requestOrigin.startsWith("https://");
     const cookieDomain =
       getSharedCookieDomain(redirectUri) || getSharedCookieDomain(requestOrigin);
+    const sessionId = ensureRequestSession(req, res, {
+      requestOrigin,
+      createIfMissing: true,
+      cookieDomain,
+    });
+    const state = url.searchParams.get("state") || "";
+    const authorizationCode = url.searchParams.get("code") || "";
+    const cookieState = parseCookies(req)[OAUTH_STATE_COOKIE] || "";
     const clearStateCookie = buildCookie(OAUTH_STATE_COOKIE, "", {
       maxAgeSeconds: 0,
       secure: secureCookie,
@@ -3233,7 +3473,7 @@ function createGoogleAuthPlugin(config) {
       return;
     }
 
-    if (!consumePendingState(state)) {
+    if (!consumePendingState(state, sessionId)) {
       res.setHeader("Set-Cookie", clearStateCookie);
       jsonResponse(res, 400, {
         error: "expired_state",
@@ -3268,7 +3508,7 @@ function createGoogleAuthPlugin(config) {
       return;
     }
 
-    const existingState = readStoredAuthState();
+    const existingState = readStoredAuthState(sessionId);
     const accessToken =
       typeof tokenPayload.access_token === "string" ? tokenPayload.access_token : "";
     const refreshToken =
@@ -3318,7 +3558,7 @@ function createGoogleAuthPlugin(config) {
           domain: cookieDomain,
         });
 
-    writeStoredAuthState({
+    writeStoredAuthState(sessionId, {
       refreshToken,
       accessToken,
       tokenType:
@@ -3342,14 +3582,26 @@ function createGoogleAuthPlugin(config) {
         : "/";
 
     res.statusCode = 302;
-    res.setHeader("Set-Cookie", [clearStateCookie, connectedCookie]);
+    res.setHeader("Set-Cookie", [
+      clearStateCookie,
+      connectedCookie,
+      buildSessionCookie(sessionId, {
+        secure: secureCookie,
+        domain: cookieDomain,
+      }),
+    ]);
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Location", redirectTarget);
     res.end();
   };
 
-  const handleStatus = (res) => {
-    const storedState = readStoredAuthState();
+  const handleStatus = (req, res) => {
+    const requestOrigin = getRequestOrigin(req);
+    const sessionId = ensureRequestSession(req, res, {
+      requestOrigin,
+      createIfMissing: true,
+    });
+    const storedState = readStoredAuthState(sessionId);
     const hasValidAccessToken =
       Boolean(storedState.accessToken) && storedState.accessTokenExpiresAt > Date.now() + 30_000;
     const hasIdentitySession = Boolean(storedState.refreshToken || hasValidAccessToken);
@@ -3357,7 +3609,10 @@ function createGoogleAuthPlugin(config) {
     const isConnected = hasIdentitySession && hasDriveScope;
 
     if (isConnected && hasDriveScope && hasValidAccessToken && !storedState.driveFolderId) {
-      void ensureJustCalendarFolderForCurrentConnection({ config: googleConfig }).catch(() => {
+      void ensureJustCalendarFolderForCurrentConnection({
+        config: googleConfig,
+        sessionId,
+      }).catch(() => {
         // Folder creation is best-effort and should not block status checks.
       });
     }
@@ -3375,12 +3630,20 @@ function createGoogleAuthPlugin(config) {
     });
   };
 
-  const handleAccessToken = async (res) => {
+  const handleAccessToken = async (req, res) => {
     if (!ensureGoogleOAuthConfigured(googleConfig, res)) {
       return;
     }
+    const requestOrigin = getRequestOrigin(req);
+    const sessionId = ensureRequestSession(req, res, {
+      requestOrigin,
+      createIfMissing: true,
+    });
 
-    const tokenStateResult = await ensureValidAccessToken({ config: googleConfig });
+    const tokenStateResult = await ensureValidAccessToken({
+      config: googleConfig,
+      sessionId,
+    });
     if (!tokenStateResult.ok) {
       jsonResponse(res, tokenStateResult.status, tokenStateResult.payload);
       return;
@@ -3397,10 +3660,18 @@ function createGoogleAuthPlugin(config) {
   };
 
   const handleDisconnect = async (req, res) => {
-    const storedState = readStoredAuthState();
     const requestOrigin = getRequestOrigin(req);
     const secureCookie = requestOrigin.startsWith("https://");
     const cookieDomain = getSharedCookieDomain(requestOrigin);
+    const sessionId = ensureRequestSession(req, res, {
+      requestOrigin,
+      createIfMissing: false,
+    });
+    const clearSessionCookie = buildCookie(OAUTH_SESSION_COOKIE, "", {
+      maxAgeSeconds: 0,
+      secure: secureCookie,
+      domain: cookieDomain,
+    });
     const clearConnectedCookie = buildCookie(OAUTH_CONNECTED_COOKIE, "", {
       maxAgeSeconds: 0,
       httpOnly: false,
@@ -3408,33 +3679,26 @@ function createGoogleAuthPlugin(config) {
       domain: cookieDomain,
     });
 
-    const tokenToRevoke = storedState.refreshToken || storedState.accessToken;
-    if (tokenToRevoke) {
-      try {
-        await fetch(GOOGLE_REVOKE_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({ token: tokenToRevoke }),
-        });
-      } catch {
-        // Revoke failures should not block local disconnect cleanup.
-      }
+    if (sessionId) {
+      clearStoredAuthState(sessionId);
     }
-
-    clearStoredAuthState();
-    res.setHeader("Set-Cookie", clearConnectedCookie);
+    res.setHeader("Set-Cookie", [clearConnectedCookie, clearSessionCookie]);
     jsonResponse(res, 200, { connected: false });
   };
 
-  const handleEnsureFolder = async (res) => {
+  const handleEnsureFolder = async (req, res) => {
     if (!ensureGoogleOAuthConfigured(googleConfig, res)) {
       return;
     }
+    const requestOrigin = getRequestOrigin(req);
+    const sessionId = ensureRequestSession(req, res, {
+      requestOrigin,
+      createIfMissing: true,
+    });
 
     const folderResult = await ensureJustCalendarFolderForCurrentConnection({
       config: googleConfig,
+      sessionId,
     });
     if (!folderResult.ok) {
       jsonResponse(res, Number(folderResult.status) || 502, {
@@ -3457,6 +3721,11 @@ function createGoogleAuthPlugin(config) {
     if (!ensureGoogleOAuthConfigured(googleConfig, res)) {
       return;
     }
+    const requestOrigin = getRequestOrigin(req);
+    const sessionId = ensureRequestSession(req, res, {
+      requestOrigin,
+      createIfMissing: true,
+    });
 
     let bootstrapRequestPayload = {};
     try {
@@ -3470,7 +3739,10 @@ function createGoogleAuthPlugin(config) {
       return;
     }
 
-    const tokenStateResult = await ensureValidAccessToken({ config: googleConfig });
+    const tokenStateResult = await ensureValidAccessToken({
+      config: googleConfig,
+      sessionId,
+    });
     if (!tokenStateResult.ok) {
       jsonResponse(res, tokenStateResult.status, {
         ok: false,
@@ -3500,6 +3772,7 @@ function createGoogleAuthPlugin(config) {
     const ensureConfigResult = await ensureJustCalendarConfigForCurrentConnection({
       accessToken: stateWithToken.accessToken,
       config: googleConfig,
+      sessionId,
       bootstrapBundle,
     });
     if (!ensureConfigResult.ok) {
@@ -3557,6 +3830,11 @@ function createGoogleAuthPlugin(config) {
     if (!ensureGoogleOAuthConfigured(googleConfig, res)) {
       return;
     }
+    const requestOrigin = getRequestOrigin(req);
+    const sessionId = ensureRequestSession(req, res, {
+      requestOrigin,
+      createIfMissing: true,
+    });
 
     let saveRequestPayload = {};
     try {
@@ -3570,7 +3848,10 @@ function createGoogleAuthPlugin(config) {
       return;
     }
 
-    const tokenStateResult = await ensureValidAccessToken({ config: googleConfig });
+    const tokenStateResult = await ensureValidAccessToken({
+      config: googleConfig,
+      sessionId,
+    });
     if (!tokenStateResult.ok) {
       jsonResponse(res, tokenStateResult.status, {
         ok: false,
@@ -3599,6 +3880,7 @@ function createGoogleAuthPlugin(config) {
     const saveResult = await saveJustCalendarStateForCurrentConnection({
       accessToken: stateWithToken.accessToken,
       config: googleConfig,
+      sessionId,
       bootstrapBundle,
     });
     if (!saveResult.ok) {
@@ -3651,6 +3933,11 @@ function createGoogleAuthPlugin(config) {
     if (!ensureGoogleOAuthConfigured(googleConfig, res)) {
       return;
     }
+    const requestOrigin = getRequestOrigin(req);
+    const sessionId = ensureRequestSession(req, res, {
+      requestOrigin,
+      createIfMissing: true,
+    });
 
     let saveRequestPayload = {};
     try {
@@ -3664,7 +3951,10 @@ function createGoogleAuthPlugin(config) {
       return;
     }
 
-    const tokenStateResult = await ensureValidAccessToken({ config: googleConfig });
+    const tokenStateResult = await ensureValidAccessToken({
+      config: googleConfig,
+      sessionId,
+    });
     if (!tokenStateResult.ok) {
       jsonResponse(res, tokenStateResult.status, {
         ok: false,
@@ -3693,6 +3983,7 @@ function createGoogleAuthPlugin(config) {
     const saveResult = await saveCurrentCalendarStateForCurrentConnection({
       accessToken: stateWithToken.accessToken,
       config: googleConfig,
+      sessionId,
       bootstrapBundle,
     });
     if (!saveResult.ok) {
@@ -3717,12 +4008,20 @@ function createGoogleAuthPlugin(config) {
     });
   };
 
-  const handleLoadState = async (res) => {
+  const handleLoadState = async (req, res) => {
     if (!ensureGoogleOAuthConfigured(googleConfig, res)) {
       return;
     }
+    const requestOrigin = getRequestOrigin(req);
+    const sessionId = ensureRequestSession(req, res, {
+      requestOrigin,
+      createIfMissing: true,
+    });
 
-    const tokenStateResult = await ensureValidAccessToken({ config: googleConfig });
+    const tokenStateResult = await ensureValidAccessToken({
+      config: googleConfig,
+      sessionId,
+    });
     if (!tokenStateResult.ok) {
       jsonResponse(res, tokenStateResult.status, {
         ok: false,
@@ -3750,6 +4049,7 @@ function createGoogleAuthPlugin(config) {
     const loadResult = await loadJustCalendarStateForCurrentConnection({
       accessToken: stateWithToken.accessToken,
       config: googleConfig,
+      sessionId,
     });
     if (!loadResult.ok) {
       jsonResponse(res, Number(loadResult.status) || 502, {
@@ -3810,7 +4110,7 @@ function createGoogleAuthPlugin(config) {
             methodNotAllowed(res);
             return;
           }
-          handleStatus(res);
+          handleStatus(req, res);
           return;
         }
 
@@ -3819,7 +4119,7 @@ function createGoogleAuthPlugin(config) {
             methodNotAllowed(res);
             return;
           }
-          await handleAccessToken(res);
+          await handleAccessToken(req, res);
           return;
         }
 
@@ -3837,7 +4137,7 @@ function createGoogleAuthPlugin(config) {
             methodNotAllowed(res);
             return;
           }
-          await handleEnsureFolder(res);
+          await handleEnsureFolder(req, res);
           return;
         }
 
@@ -3882,7 +4182,7 @@ function createGoogleAuthPlugin(config) {
             methodNotAllowed(res);
             return;
           }
-          await handleLoadState(res);
+          await handleLoadState(req, res);
           return;
         }
 
