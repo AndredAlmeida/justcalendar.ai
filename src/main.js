@@ -1491,14 +1491,6 @@ function setupProfileSwitcher({ switcher, button, options, actionsMenu, onDriveS
       return;
     }
 
-    knownAccounts.sort((leftEntry, rightEntry) => {
-      const leftIsCurrent = leftEntry.id === selectedAccountId;
-      const rightIsCurrent = rightEntry.id === selectedAccountId;
-      if (leftIsCurrent && !rightIsCurrent) return -1;
-      if (!leftIsCurrent && rightIsCurrent) return 1;
-      return leftEntry.name.localeCompare(rightEntry.name, undefined, { sensitivity: "base" });
-    });
-
     const accountFragment = document.createDocumentFragment();
     knownAccounts.forEach((accountEntry) => {
       const accountOption = document.createElement("div");

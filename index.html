@@ -2120,17 +2120,6 @@
         overflow-y: auto;
       }
 
-      .profile-options-title {
-        margin: 0;
-        padding: 0.08rem 0.88rem 0.34rem;
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.01em;
-        text-align: center;
-        color: var(--ink);
-        opacity: 0.92;
-      }
-
       #profile-options .profile-option {
         min-height: 2.2rem;
         border: 0;
@@ -2141,31 +2130,6 @@
         text-overflow: ellipsis;
         white-space: nowrap;
         text-decoration: none;
-      }
-
-      #profile-account-list {
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      #profile-options .profile-account-option {
-        min-height: 2.05rem;
-        cursor: pointer;
-        pointer-events: auto;
-        opacity: 0.9;
-      }
-
-      #profile-options .profile-account-option:hover,
-      #profile-options .profile-account-option:focus-visible {
-        background: color-mix(in srgb, var(--line) 10%, transparent);
-        outline: none;
-      }
-
-      #profile-options .profile-account-option.is-current {
-        opacity: 1;
-        font-weight: 600;
-        background: color-mix(in srgb, var(--line) 14%, transparent);
       }
 
       #profile-options .profile-option-label {
@@ -2200,65 +2164,6 @@
         opacity: 0.58;
         cursor: not-allowed;
         pointer-events: none;
-      }
-
-      #profile-options .profile-add-account-shell {
-        display: grid;
-        gap: 0.2rem;
-      }
-
-      #profile-options .profile-add-account-shell[hidden] {
-        display: none;
-      }
-
-      #profile-options .profile-add-account-trigger {
-        border-radius: 0;
-        max-height: 2.2rem;
-        overflow: hidden;
-        transition:
-          max-height 0.22s ease,
-          opacity 0.18s ease,
-          padding 0.18s ease,
-          border-width 0.18s ease,
-          box-shadow 0.18s ease,
-          transform 0.18s ease;
-      }
-
-      #profile-options .profile-add-account-editor {
-        max-height: 0;
-        opacity: 0;
-        overflow: hidden;
-        pointer-events: none;
-        transform: translateY(-0.2rem);
-        padding: 0 0.82rem;
-        display: grid;
-        gap: 0.38rem;
-        transition:
-          max-height 0.24s ease,
-          opacity 0.18s ease,
-          transform 0.18s ease;
-      }
-
-      #profile-options .profile-add-account-shell.is-editing .profile-add-account-trigger {
-        max-height: 0;
-        min-height: 0;
-        opacity: 0;
-        pointer-events: none;
-        padding-top: 0;
-        padding-bottom: 0;
-        border-width: 0;
-        box-shadow: none;
-        transform: scale(0.98);
-      }
-
-      #profile-options .profile-add-account-shell.is-editing .profile-add-account-editor {
-        max-height: calc(11.4rem + 6px);
-        opacity: 1;
-        overflow: visible;
-        pointer-events: auto;
-        transform: translateY(0);
-        padding-top: 3px;
-        padding-bottom: 3px;
       }
 
       #drive-actions-menu {
@@ -4900,75 +4805,7 @@
           </span>
         </div>
         <div id="profile-switcher">
-          <div id="profile-options" aria-label="Account options">
-            <p class="profile-options-title">Accounts</p>
-            <div id="profile-account-list" class="profile-account-list" aria-label="Accounts available">
-              <div class="calendar-option profile-option profile-account-option is-current">
-                default
-              </div>
-            </div>
-            <div
-              id="profile-actions-divider"
-              class="calendar-options-divider"
-              aria-hidden="true"
-            ></div>
-            <div id="profile-add-account-shell" class="profile-add-account-shell" hidden>
-              <button
-                id="profile-add-account-trigger"
-                type="button"
-                class="calendar-option profile-option profile-add-account-trigger"
-                data-profile-action="add-account"
-                aria-label="Add Account"
-              >
-                <span class="calendar-option-icon" aria-hidden="true">+</span>
-                <span class="calendar-option-label">Add Account</span>
-              </button>
-              <div
-                id="profile-add-account-editor"
-                class="profile-add-account-editor"
-                aria-label="New Account"
-                aria-hidden="true"
-              >
-                <div class="calendar-add-panel">
-                  <p class="calendar-add-title">New Account</p>
-                  <label class="calendar-add-field" for="new-account-name">
-                    <span class="calendar-add-field-label">Name</span>
-                    <input
-                      id="new-account-name"
-                      class="calendar-add-input"
-                      type="text"
-                      placeholder="Account name"
-                      autocomplete="off"
-                      autocapitalize="off"
-                      autocorrect="off"
-                      spellcheck="false"
-                      data-1p-ignore="true"
-                      data-lpignore="true"
-                    />
-                  </label>
-                  <div class="calendar-add-actions">
-                    <button
-                      id="profile-add-account-submit"
-                      type="button"
-                      class="calendar-option calendar-action-btn"
-                      data-profile-action="add-account-submit"
-                      aria-label="Add"
-                    >
-                      Add
-                    </button>
-                    <button
-                      id="profile-add-account-cancel"
-                      type="button"
-                      class="calendar-option calendar-action-btn"
-                      data-profile-action="add-account-cancel"
-                      aria-label="Cancel"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div id="profile-options" aria-label="Google Drive options">
             <a
               id="profile-google-drive-action"
               href="/api/auth/google/start"
@@ -5015,7 +4852,7 @@
             id="header-profile-btn"
             type="button"
             class="tooltip-target tooltip-bottom"
-            data-tooltip="Account Menu"
+            data-tooltip="Google Drive"
             aria-label="Open account menu"
             aria-expanded="false"
           >
