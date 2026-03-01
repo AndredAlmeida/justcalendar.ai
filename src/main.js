@@ -2434,7 +2434,7 @@ function setupProfileSwitcher({
     const fallbackCalendars = [
       {
         id: "sleep-score",
-        name: "Sleep Score",
+        name: "Sleep",
         type: CALENDAR_TYPE_SCORE,
         color: "blue",
         pinned: true,
@@ -2443,7 +2443,7 @@ function setupProfileSwitcher({
       },
       {
         id: "took-pills",
-        name: "Took Pills",
+        name: "Pills",
         type: CALENDAR_TYPE_CHECK,
         color: "green",
         pinned: true,

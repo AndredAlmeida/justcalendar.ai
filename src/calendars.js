@@ -34,7 +34,7 @@ const FIRST_RUN_SEED_ACTIVE_CALENDAR_ID = "sleep-score";
 const FIRST_RUN_SEED_CALENDARS = Object.freeze([
   {
     id: "sleep-score",
-    name: "Sleep Score",
+    name: "Sleep",
     type: CALENDAR_TYPE_SCORE,
     color: "blue",
     pinned: true,
@@ -42,7 +42,7 @@ const FIRST_RUN_SEED_CALENDARS = Object.freeze([
   },
   {
     id: "took-pills",
-    name: "Took Pills",
+    name: "Pills",
     type: CALENDAR_TYPE_CHECK,
     color: "green",
     pinned: true,
