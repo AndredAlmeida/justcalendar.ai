@@ -46,6 +46,7 @@ const CALENDARS_STORAGE_KEY = "justcal-calendars";
 const CALENDAR_DAY_STATES_STORAGE_KEY = "justcal-calendar-day-states";
 const LEGACY_DAY_STATE_STORAGE_KEY = "justcal-day-states";
 const THEME_STORAGE_KEY = "justcal-theme";
+const LOCAL_EMPTY_STATE_STORAGE_KEY = "isEmpty";
 const DRIVE_ACCOUNT_ID_STORAGE_KEY = "justcal-drive-account-id";
 const DRIVE_CALENDAR_ID_MAP_STORAGE_KEY = "justcal-drive-calendar-id-map";
 const DEFAULT_THEME = "tokyo-night-storm";
@@ -220,6 +221,23 @@ function getOrCreateDriveAccountId() {
     return generatedAccountId;
   }
   return generatedAccountId;
+}
+
+function readLocalIsEmptyFlag() {
+  try {
+    return localStorage.getItem(LOCAL_EMPTY_STATE_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function writeLocalIsEmptyFlag(isEmpty) {
+  try {
+    localStorage.setItem(LOCAL_EMPTY_STATE_STORAGE_KEY, isEmpty ? "true" : "false");
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function readStoredDriveCalendarIdMap() {
@@ -4295,6 +4313,7 @@ function setupProfileSwitcher({
       JSON.stringify(currentDayStatesByCalendarId),
     );
     localStorage.removeItem(LEGACY_DAY_STATE_STORAGE_KEY);
+    writeLocalIsEmptyFlag(false);
 
     return {
       ok: true,
@@ -4664,6 +4683,7 @@ function setupProfileSwitcher({
       );
       localStorage.setItem(CALENDAR_DAY_STATES_STORAGE_KEY, JSON.stringify({}));
       localStorage.removeItem(LEGACY_DAY_STATE_STORAGE_KEY);
+      writeLocalIsEmptyFlag(true);
       clearCalendarDriveDirtyBaselines();
       resetAutosaveRuntimeState();
       refreshObservedLocalActiveCalendarId();
@@ -4777,6 +4797,7 @@ function setupProfileSwitcher({
       localStorage.setItem(THEME_STORAGE_KEY, remoteSelectedTheme);
     }
     localStorage.removeItem(LEGACY_DAY_STATE_STORAGE_KEY);
+    writeLocalIsEmptyFlag(false);
     return true;
   };
 
@@ -4822,9 +4843,11 @@ function setupProfileSwitcher({
         }
 
         if (directBootstrapResult.ok && directBootstrapResult.reason === "config_exists") {
+          const localIsEmpty = readLocalIsEmptyFlag();
+          const shouldPromptConflict = Boolean(promptOnExistingRemoteData && !localIsEmpty);
           let conflictDecision = "restore";
           if (
-            promptOnExistingRemoteData &&
+            shouldPromptConflict &&
             driveConflictPopup &&
             typeof driveConflictPopup.promptDecision === "function"
           ) {
@@ -4855,10 +4878,15 @@ function setupProfileSwitcher({
             }
 
             setDriveBusy(true);
-          } else if (promptOnExistingRemoteData) {
+          } else if (shouldPromptConflict) {
             logGoogleAuthMessage(
               "warn",
               "Conflict popup could not be shown because popup API was unavailable. Falling back to restore.",
+            );
+          } else if (promptOnExistingRemoteData && localIsEmpty) {
+            logGoogleAuthMessage(
+              "info",
+              "Remote Drive config exists and local isEmpty=true; restoring server data automatically.",
             );
           } else {
             logGoogleAuthMessage(
@@ -5579,6 +5607,7 @@ function setupProfileSwitcher({
       JSON.stringify(nextState.localDayStatesPayload),
     );
     localStorage.removeItem(LEGACY_DAY_STATE_STORAGE_KEY);
+    writeLocalIsEmptyFlag(false);
 
     rememberKnownDriveAccountsFromConfigPayload(nextState.configPayload);
     rememberCachedCalendarConfigEntry(nextState.calendar);
@@ -5787,6 +5816,7 @@ function setupProfileSwitcher({
 
   if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
     window.addEventListener(LOCAL_CALENDAR_STORAGE_CHANGED_EVENT, (event) => {
+      writeLocalIsEmptyFlag(false);
       syncCalendarDirtyIndicator();
 
       const changedStorageKey =
@@ -5813,7 +5843,10 @@ function setupProfileSwitcher({
       }
 
       scheduleAutosave({
-        requestedMode: changedStorageKey === CALENDARS_STORAGE_KEY ? "all" : "calendar",
+        requestedMode:
+          changedStorageKey === CALENDARS_STORAGE_KEY || changedStorageKey === THEME_STORAGE_KEY
+            ? "all"
+            : "calendar",
         reason: changedStorageKey ? `local_change_${changedStorageKey}` : "local_change",
       });
     });

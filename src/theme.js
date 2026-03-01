@@ -1,4 +1,5 @@
 const THEME_STORAGE_KEY = "justcal-theme";
+const LOCAL_CALENDAR_STORAGE_CHANGED_EVENT = "justcal:local-calendar-storage-changed";
 const THEME_BUTTON_LABEL = "Open Themes";
 const THEME_CLOSE_LABEL = "Close themes";
 const TOKYO_NIGHT_STORM_THEME = "tokyo-night-storm";
@@ -43,8 +44,10 @@ function getStoredTheme() {
 function setStoredTheme(theme) {
   try {
     localStorage.setItem(THEME_STORAGE_KEY, theme);
+    return true;
   } catch {
     // Ignore storage failures and keep toggle behavior in-memory.
+    return false;
   }
 }
 
@@ -122,7 +125,20 @@ export function setupThemeToggle(button) {
     applyTheme({ theme: normalizedTheme, root, themeColorMeta });
     syncThemeOptionState({ optionButtons, theme: normalizedTheme });
     if (persist) {
-      setStoredTheme(normalizedTheme);
+      const persisted = setStoredTheme(normalizedTheme);
+      if (
+        persisted &&
+        typeof window !== "undefined" &&
+        typeof window.dispatchEvent === "function"
+      ) {
+        window.dispatchEvent(
+          new CustomEvent(LOCAL_CALENDAR_STORAGE_CHANGED_EVENT, {
+            detail: {
+              key: THEME_STORAGE_KEY,
+            },
+          }),
+        );
+      }
     }
     currentTheme = normalizedTheme;
     return true;

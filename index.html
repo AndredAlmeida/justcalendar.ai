@@ -3536,6 +3536,34 @@
         opacity: 1;
       }
 
+      #privacy-policy-link {
+        position: fixed;
+        left: max(1.24rem, calc(env(safe-area-inset-left, 0px) + 1.24rem));
+        bottom: max(0.48rem, calc(env(safe-area-inset-bottom, 0px) + 0.48rem));
+        font-size: 0.58rem;
+        line-height: 1;
+        letter-spacing: 0.01em;
+        color: color-mix(in srgb, var(--ink) 58%, transparent);
+        text-decoration: none;
+        opacity: 0.46;
+        z-index: 84;
+        transition:
+          opacity 0.15s ease,
+          color 0.15s ease;
+      }
+
+      #privacy-policy-link:hover {
+        opacity: 0.72;
+        color: color-mix(in srgb, var(--ink) 76%, transparent);
+      }
+
+      #privacy-policy-link:focus-visible {
+        opacity: 0.88;
+        outline: 2px solid color-mix(in srgb, var(--line) 82%, transparent);
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+
       #drive-busy-overlay.is-active {
         opacity: 1;
         pointer-events: auto;
@@ -4462,6 +4490,12 @@
           left: max(0.5rem, env(safe-area-inset-left, 0px));
           bottom: max(0.96rem, env(safe-area-inset-bottom, 0px));
           border-radius: 10px;
+        }
+
+        #privacy-policy-link {
+          left: max(1.08rem, calc(env(safe-area-inset-left, 0px) + 1.08rem));
+          bottom: max(0.38rem, calc(env(safe-area-inset-bottom, 0px) + 0.38rem));
+          font-size: 0.54rem;
         }
 
         #calendar-switcher.is-expanded.is-adding #calendar-options {
@@ -5467,6 +5501,9 @@
       </div>
     </section>
     <div id="drive-dirty-indicator" aria-hidden="true"></div>
+    <a id="privacy-policy-link" href="http://justcalendar.ai/privacy-policy.html"
+      >Privacy Policy</a
+    >
     <div id="drive-busy-overlay" aria-hidden="true">
       <div
         class="drive-busy-wheel"
