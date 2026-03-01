@@ -4641,6 +4641,62 @@ function setupProfileSwitcher({
     return Boolean(dirtySummary?.hasDirtyState);
   };
 
+  const clearLocalCalendarDataToDefault = ({
+    reason = "clear_all",
+    reload = true,
+  } = {}) => {
+    try {
+      localStorage.setItem(
+        CALENDARS_STORAGE_KEY,
+        JSON.stringify({
+          version: 1,
+          activeCalendarId: CLEAR_ALL_DEFAULT_CALENDAR_ID,
+          calendars: [
+            {
+              id: CLEAR_ALL_DEFAULT_CALENDAR_ID,
+              name: CLEAR_ALL_DEFAULT_CALENDAR_NAME,
+              type: CALENDAR_TYPE_CHECK,
+              color: DEFAULT_CALENDAR_COLOR,
+              pinned: false,
+            },
+          ],
+        }),
+      );
+      localStorage.setItem(CALENDAR_DAY_STATES_STORAGE_KEY, JSON.stringify({}));
+      localStorage.removeItem(LEGACY_DAY_STATE_STORAGE_KEY);
+      clearCalendarDriveDirtyBaselines();
+      resetAutosaveRuntimeState();
+      refreshObservedLocalActiveCalendarId();
+      logGoogleAuthMessage(
+        "info",
+        "Cleared local calendar data. Only Default Calendar (Check) remains.",
+        { reason },
+      );
+
+      if (reload) {
+        window.location.reload();
+        return {
+          ok: true,
+          reloaded: true,
+        };
+      }
+
+      return {
+        ok: true,
+        reloaded: false,
+      };
+    } catch (error) {
+      logGoogleAuthMessage("error", "Clear All failed while resetting local storage.", {
+        reason,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  };
+
   const syncLocalStateFromDrive = (bootstrapPayload) => {
     const remoteState =
       bootstrapPayload && typeof bootstrapPayload === "object" ? bootstrapPayload.remoteState : null;
@@ -5928,11 +5984,26 @@ function setupProfileSwitcher({
           optionButton.setAttribute("aria-disabled", "true");
         }
         try {
-          await disconnectGoogleDriveSession({
+          const disconnectResult = await disconnectGoogleDriveSession({
             failureLogMessage: "Google disconnect request failed.",
             endpointErrorLogMessage: "Google disconnect endpoint returned an error.",
           });
           markGoogleLoginIntent(false);
+          if (!disconnectResult?.ok) {
+            logGoogleAuthMessage(
+              "warn",
+              "Google disconnect did not fully succeed, but local data will still be cleared to match Clear All behavior.",
+              disconnectResult,
+            );
+          }
+
+          const clearAfterLogoutResult = clearLocalCalendarDataToDefault({
+            reason: "logout_google_drive",
+            reload: true,
+          });
+          if (clearAfterLogoutResult?.ok && clearAfterLogoutResult.reloaded) {
+            return;
+          }
         } finally {
           if (optionButton instanceof HTMLButtonElement) {
             optionButton.disabled = false;
@@ -6312,37 +6383,13 @@ function setupProfileSwitcher({
         }
 
         try {
-          localStorage.setItem(
-            CALENDARS_STORAGE_KEY,
-            JSON.stringify({
-              version: 1,
-              activeCalendarId: CLEAR_ALL_DEFAULT_CALENDAR_ID,
-              calendars: [
-                {
-                  id: CLEAR_ALL_DEFAULT_CALENDAR_ID,
-                  name: CLEAR_ALL_DEFAULT_CALENDAR_NAME,
-                  type: CALENDAR_TYPE_CHECK,
-                  color: DEFAULT_CALENDAR_COLOR,
-                  pinned: false,
-                },
-              ],
-            }),
-          );
-          localStorage.setItem(CALENDAR_DAY_STATES_STORAGE_KEY, JSON.stringify({}));
-          localStorage.removeItem(LEGACY_DAY_STATE_STORAGE_KEY);
-          clearCalendarDriveDirtyBaselines();
-          resetAutosaveRuntimeState();
-          logGoogleAuthMessage(
-            "info",
-            "Cleared local calendar data. Only Default Calendar (Check) remains.",
-          );
-          setExpanded(false);
-          window.location.reload();
-          return;
-        } catch (error) {
-          logGoogleAuthMessage("error", "Clear All failed while resetting local storage.", {
-            error: error instanceof Error ? error.message : String(error),
+          const clearResult = clearLocalCalendarDataToDefault({
+            reason: "clear_all",
+            reload: true,
           });
+          if (clearResult?.ok && clearResult.reloaded) {
+            return;
+          }
         } finally {
           if (optionButton instanceof HTMLButtonElement) {
             optionButton.disabled = false;
