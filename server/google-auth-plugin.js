@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 const OAUTH_STATE_COOKIE = "justcal_google_oauth_state";
 const OAUTH_CONNECTED_COOKIE = "justcal_google_connected";
@@ -213,6 +213,121 @@ function computeAgentTokenHmac({ pepper = "", token = "" } = {}) {
     return "";
   }
   return createHmac("sha256", pepper).update(`${pepper}${token}`).digest("hex");
+}
+
+function normalizeAgentTokenValue(rawToken = "") {
+  const token = typeof rawToken === "string" ? rawToken.trim() : "";
+  if (!token) {
+    return "";
+  }
+  // Current format is jca_<hex>, but keep a small future-safe allowance.
+  return /^jca_[A-Za-z0-9_-]{24,256}$/.test(token) ? token : "";
+}
+
+function timingSafeStringEquals(leftValue, rightValue) {
+  const left = typeof leftValue === "string" ? leftValue : "";
+  const right = typeof rightValue === "string" ? rightValue : "";
+  if (!left || !right) {
+    return false;
+  }
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+  try {
+    return timingSafeEqual(leftBuffer, rightBuffer);
+  } catch {
+    return false;
+  }
+}
+
+function extractBearerTokenFromRequest(req) {
+  const authorizationHeader =
+    typeof req?.headers?.authorization === "string" ? req.headers.authorization.trim() : "";
+  if (!authorizationHeader) {
+    return "";
+  }
+  const bearerMatch = authorizationHeader.match(/^Bearer\s+(.+)$/i);
+  if (!bearerMatch || typeof bearerMatch[1] !== "string") {
+    return "";
+  }
+  return bearerMatch[1].trim();
+}
+
+function extractAgentTokenFromHeaders(req) {
+  const bearerToken = normalizeAgentTokenValue(extractBearerTokenFromRequest(req));
+  if (bearerToken) {
+    return bearerToken;
+  }
+  const rawHeaderValue = req?.headers?.["x-justcalendar-agent-token"];
+  const headerToken =
+    typeof rawHeaderValue === "string"
+      ? rawHeaderValue
+      : Array.isArray(rawHeaderValue)
+        ? rawHeaderValue[0]
+        : "";
+  return normalizeAgentTokenValue(headerToken);
+}
+
+async function readAgentTokenFromRequest(req) {
+  const tokenFromHeaders = extractAgentTokenFromHeaders(req);
+  if (tokenFromHeaders) {
+    return { token: tokenFromHeaders, error: "" };
+  }
+
+  let parsedBody = {};
+  try {
+    parsedBody = await readJsonRequestBody(req);
+  } catch (error) {
+    return {
+      token: "",
+      error: error instanceof Error ? error.message : "invalid_json_request_body",
+    };
+  }
+
+  const tokenFromBody = normalizeAgentTokenValue(parsedBody?.token);
+  return {
+    token: tokenFromBody,
+    error: "",
+  };
+}
+
+function resolveSessionIdFromAgentToken({ token = "", pepper = "" } = {}) {
+  const normalizedToken = normalizeAgentTokenValue(token);
+  const normalizedPepper = typeof pepper === "string" ? pepper.trim() : "";
+  if (!normalizedToken || !normalizedPepper) {
+    return "";
+  }
+
+  const expectedTokenHmac = computeAgentTokenHmac({
+    pepper: normalizedPepper,
+    token: normalizedToken,
+  });
+  if (!expectedTokenHmac) {
+    return "";
+  }
+
+  const authStore = readStoredAuthStore();
+  const sessionEntries = authStore?.sessions && typeof authStore.sessions === "object"
+    ? Object.entries(authStore.sessions)
+    : [];
+
+  for (const [rawSessionId, rawSessionState] of sessionEntries) {
+    const sessionId = normalizeSessionId(rawSessionId);
+    if (!sessionId) {
+      continue;
+    }
+    const sessionState = normalizeStoredAuthState(rawSessionState);
+    if (!sessionState.agentTokenHmac || !hasStoredAuthCredentials(sessionState)) {
+      continue;
+    }
+    if (timingSafeStringEquals(sessionState.agentTokenHmac, expectedTokenHmac)) {
+      return sessionId;
+    }
+  }
+
+  return "";
 }
 
 function normalizeSessionId(rawSessionId) {
@@ -3825,6 +3940,87 @@ function createGoogleAuthPlugin(config) {
     });
   };
 
+  const handleAgentTokenAccessToken = async (req, res) => {
+    if (!ensureGoogleOAuthConfigured(googleConfig, res)) {
+      return;
+    }
+    const tokenPepper = ensureAgentTokenPepperConfigured(googleConfig, res);
+    if (!tokenPepper) {
+      return;
+    }
+
+    const tokenReadResult = await readAgentTokenFromRequest(req);
+    if (tokenReadResult.error) {
+      jsonResponse(res, 400, {
+        ok: false,
+        error: "invalid_agent_token_request",
+        message: "Unable to parse request body while reading agent token.",
+        details: tokenReadResult.error,
+      });
+      return;
+    }
+
+    if (!tokenReadResult.token) {
+      jsonResponse(res, 401, {
+        ok: false,
+        error: "missing_agent_token",
+        message:
+          "Agent token is required. Send Authorization: Bearer <token>, x-justcalendar-agent-token, or JSON body { token }.",
+      });
+      return;
+    }
+
+    const tokenSessionId = resolveSessionIdFromAgentToken({
+      token: tokenReadResult.token,
+      pepper: tokenPepper,
+    });
+    if (!tokenSessionId) {
+      jsonResponse(res, 401, {
+        ok: false,
+        error: "invalid_agent_token",
+        message: "Agent token is invalid, expired, or no longer associated with an active session.",
+      });
+      return;
+    }
+
+    const tokenStateResult = await ensureValidAccessToken({
+      config: googleConfig,
+      sessionId: tokenSessionId,
+    });
+    if (!tokenStateResult.ok) {
+      jsonResponse(res, tokenStateResult.status, {
+        ok: false,
+        ...(tokenStateResult.payload || {
+          error: "not_connected",
+          message: "Google Drive is not connected.",
+        }),
+      });
+      return;
+    }
+
+    const stateWithToken = tokenStateResult.state;
+    if (!hasGoogleScope(stateWithToken.scope, GOOGLE_DRIVE_FILE_SCOPE)) {
+      jsonResponse(res, 403, {
+        ok: false,
+        error: "missing_drive_scope",
+        details: {
+          message:
+            "Current Google token does not include drive.file scope. Reconnect and approve Google Drive access.",
+        },
+      });
+      return;
+    }
+
+    jsonResponse(res, 200, {
+      ok: true,
+      accessToken: stateWithToken.accessToken,
+      tokenType: stateWithToken.tokenType || "Bearer",
+      expiresAt: stateWithToken.accessTokenExpiresAt,
+      scopes: stateWithToken.scope || "",
+      drivePermissionId: stateWithToken.drivePermissionId || "",
+    });
+  };
+
   const handleDisconnect = async (req, res) => {
     const requestOrigin = getRequestOrigin(req);
     const secureCookie = requestOrigin.startsWith("https://");
@@ -4295,6 +4491,15 @@ function createGoogleAuthPlugin(config) {
             return;
           }
           await handleAgentTokenGenerate(req, res);
+          return;
+        }
+
+        if (requestUrl.pathname === "/api/auth/google/agent-token/access-token") {
+          if (req.method !== "POST") {
+            methodNotAllowed(res);
+            return;
+          }
+          await handleAgentTokenAccessToken(req, res);
           return;
         }
 
