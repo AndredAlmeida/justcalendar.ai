@@ -2132,6 +2132,10 @@
         text-decoration: none;
       }
 
+      #profile-options .profile-mobile-only {
+        display: none;
+      }
+
       #profile-options .profile-option-label {
         min-width: 0;
         overflow: hidden;
@@ -4172,7 +4176,7 @@
 
         #calendar-view-toggle {
           --view-toggle-pad: 0.15rem;
-          grid-template-columns: 1fr;
+          display: none;
         }
 
         #calendar-view-toggle::before {
@@ -4575,6 +4579,10 @@
         #profile-switcher.is-expanded #profile-options {
           width: min(12.8rem, 78vw);
           max-height: calc(100dvh - 6.4rem);
+        }
+
+        #profile-options .profile-mobile-only {
+          display: flex;
         }
 
         #drive-actions-menu {
@@ -5327,6 +5335,24 @@
         </div>
         <div id="profile-switcher">
           <div id="profile-options" aria-label="Google Drive options">
+            <button
+              id="profile-mobile-view-toggle"
+              type="button"
+              class="calendar-option profile-option profile-mobile-only"
+              data-profile-action="mobile-view-toggle"
+              aria-label="Switch to year view"
+            >
+              <svg class="profile-option-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="4" y="6" width="16" height="4" rx="1.1" fill="currentColor" />
+                <rect x="4" y="14" width="16" height="4" rx="1.1" fill="currentColor" />
+              </svg>
+              <span
+                id="profile-mobile-view-toggle-label"
+                class="profile-option-label"
+              >
+                Switch to Year View
+              </span>
+            </button>
             <a
               id="profile-google-drive-action"
               href="/api/auth/google/start"

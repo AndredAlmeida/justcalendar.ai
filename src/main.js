@@ -27,6 +27,8 @@ const agentConnectGenerateButton = document.getElementById("agent-connect-genera
 const agentConnectCopyButton = document.getElementById("agent-connect-copy");
 const agentConnectTokenInput = document.getElementById("agent-connect-token");
 const agentConnectTokenHint = document.getElementById("agent-connect-token-hint");
+const mobileProfileViewToggleButton = document.getElementById("profile-mobile-view-toggle");
+const mobileProfileViewToggleLabel = document.getElementById("profile-mobile-view-toggle-label");
 const driveConflictPopupBackdrop = document.getElementById("drive-conflict-popup-backdrop");
 const driveConflictPopup = document.getElementById("drive-conflict-popup");
 const driveConflictRestoreButton = document.getElementById("drive-conflict-restore-btn");
@@ -1153,6 +1155,11 @@ function syncViewToggleButtons(isYearView) {
       yearViewButton.removeAttribute("aria-hidden");
       yearViewButton.tabIndex = 0;
     }
+  }
+  if (mobileProfileViewToggleButton && mobileProfileViewToggleLabel) {
+    const nextActionLabel = isYearView ? "Switch to Month View" : "Switch to Year View";
+    mobileProfileViewToggleLabel.textContent = nextActionLabel;
+    mobileProfileViewToggleButton.setAttribute("aria-label", nextActionLabel);
   }
 }
 
@@ -6138,6 +6145,18 @@ function setupProfileSwitcher({
           await refreshGoogleDriveStatus();
           setExpanded(false);
         }
+        return;
+      }
+
+      if (actionType === "mobile-view-toggle") {
+        event.preventDefault();
+        if (!isMobileLayout()) {
+          return;
+        }
+        setCalendarViewMode(
+          currentViewMode === VIEW_MODE_YEAR ? VIEW_MODE_MONTH : VIEW_MODE_YEAR,
+        );
+        setExpanded(false);
         return;
       }
 
