@@ -1629,6 +1629,8 @@ function setupProfileSwitcher({
   const profileAddAccountEditor = options.querySelector("#profile-add-account-editor");
   const profileAddAccountNameInput = options.querySelector("#new-account-name");
   const driveBusyOverlay = document.getElementById("drive-busy-overlay");
+  const driveBusyContent = driveBusyOverlay?.querySelector(".drive-busy-content");
+  const driveBusyLabelWord = driveBusyOverlay?.querySelector(".drive-busy-label-word");
   const driveDirtyIndicator = document.getElementById("drive-dirty-indicator");
   const GOOGLE_CONNECTED_COOKIE_NAME = "justcal_google_connected";
   const GOOGLE_LOGIN_MARKER_PARAM = "justcal_google_login";
@@ -1642,6 +1644,38 @@ function setupProfileSwitcher({
   const GOOGLE_DRIVE_JSON_MIME_TYPE = "application/json";
   const JUSTCALENDAR_DRIVE_FOLDER_NAME = "JustCalendar.ai";
   const JUSTCALENDAR_CONFIG_FILE_NAME = "justcalendar.json";
+  const DRIVE_BUSY_STATUS_WORDS = [
+    "Cooking",
+    "Brewing",
+    "Simmering",
+    "Forging",
+    "Conjuring",
+    "Summoning",
+    "Incubating",
+    "Gestating",
+    "Evolving",
+    "Blooming",
+    "Spawning",
+    "Manifesting",
+    "Materializing",
+    "Charging",
+    "Igniting",
+    "Whispering",
+    "Orbiting",
+    "Pulsing",
+    "Synthesizing",
+    "Alchemizing",
+    "Awakening",
+    "Crystallizing",
+    "Resonating",
+    "Dreaming",
+    "Scheming",
+    "Mesmerizing",
+    "Hypnotizing",
+    "Crafting",
+    "Weaving",
+    "Tinkering",
+  ];
   let isGoogleDriveConnected = false;
   let isGoogleDriveConfigured = true;
   let googleSub = "";
@@ -1662,6 +1696,7 @@ function setupProfileSwitcher({
   const baselineCalendarMetaSignatureById = new Map();
   const baselineCalendarDaySignatureById = new Map();
   let baselineDriveCurrentCalendarId = null;
+  let baselineDriveSelectedTheme = null;
   const AUTOSAVE_DEBOUNCE_MS = 2500;
   const AUTOSAVE_MAX_WAIT_MS = 20000;
   const AUTOSAVE_RETRY_STEPS_MS = [1000, 2000, 5000, 10000];
@@ -1674,8 +1709,35 @@ function setupProfileSwitcher({
   let autosavePendingRun = false;
   let autosavePendingMode = "calendar";
   let suppressPendingSyncBeforeUnloadOnce = false;
+  let lastDriveBusyStatusWord = "";
   let lastObservedLocalActiveCalendarId =
     typeof getStoredActiveCalendar?.().id === "string" ? getStoredActiveCalendar().id : "";
+
+  const pickDriveBusyStatusWord = () => {
+    if (!DRIVE_BUSY_STATUS_WORDS.length) {
+      return "Loading";
+    }
+    if (DRIVE_BUSY_STATUS_WORDS.length === 1) {
+      return DRIVE_BUSY_STATUS_WORDS[0];
+    }
+    let nextWord = DRIVE_BUSY_STATUS_WORDS[Math.floor(Math.random() * DRIVE_BUSY_STATUS_WORDS.length)];
+    if (nextWord === lastDriveBusyStatusWord) {
+      const currentIndex = DRIVE_BUSY_STATUS_WORDS.indexOf(nextWord);
+      nextWord = DRIVE_BUSY_STATUS_WORDS[(currentIndex + 1) % DRIVE_BUSY_STATUS_WORDS.length];
+    }
+    lastDriveBusyStatusWord = nextWord;
+    return nextWord;
+  };
+
+  const refreshDriveBusyStatusWord = () => {
+    const statusWord = pickDriveBusyStatusWord();
+    if (driveBusyLabelWord) {
+      driveBusyLabelWord.textContent = statusWord;
+    }
+    if (driveBusyContent) {
+      driveBusyContent.setAttribute("aria-label", statusWord);
+    }
+  };
 
   const logGoogleAuthMessage = (level, message, details) => {
     const logger = typeof console[level] === "function" ? console[level] : console.log;
@@ -1697,6 +1759,7 @@ function setupProfileSwitcher({
 
     const isOverlayActive = driveBusyCount > 0;
     if (!wasBusy && isOverlayActive) {
+      refreshDriveBusyStatusWord();
       logGoogleAuthMessage("info", "Loading started.");
     } else if (wasBusy && !isOverlayActive) {
       logGoogleAuthMessage("info", "Loading finished.");
@@ -2691,6 +2754,7 @@ function setupProfileSwitcher({
   const readLocalDriveCalendarSignatures = () => {
     const bootstrapPayload = buildDriveBootstrapPayload();
     const calendars = Array.isArray(bootstrapPayload?.calendars) ? bootstrapPayload.calendars : [];
+    const selectedTheme = readStoredThemeForDrive() || DEFAULT_THEME;
     const signaturesByCalendarId = new Map();
     calendars.forEach((rawCalendar) => {
       if (!isObjectLike(rawCalendar)) {
@@ -2728,6 +2792,7 @@ function setupProfileSwitcher({
 
     return {
       currentCalendarId,
+      selectedTheme,
       signaturesByCalendarId,
     };
   };
@@ -2749,7 +2814,7 @@ function setupProfileSwitcher({
   };
 
   const readDriveDirtyCalendarSummary = () => {
-    const { currentCalendarId, signaturesByCalendarId } = readLocalDriveCalendarSignatures();
+    const { currentCalendarId, selectedTheme, signaturesByCalendarId } = readLocalDriveCalendarSignatures();
     const resolvedActiveCalendarId = resolveActiveCalendarIdFromSignatures({
       currentCalendarId,
       signaturesByCalendarId,
@@ -2780,16 +2845,25 @@ function setupProfileSwitcher({
       typeof baselineDriveCurrentCalendarId !== "string"
         ? Boolean(resolvedActiveCalendarId)
         : baselineDriveCurrentCalendarId !== resolvedActiveCalendarId;
+    const normalizedBaselineSelectedTheme =
+      typeof baselineDriveSelectedTheme === "string"
+        ? normalizeThemeForDrive(baselineDriveSelectedTheme) || DEFAULT_THEME
+        : "";
+    const themeDirty = normalizedBaselineSelectedTheme
+      ? normalizedBaselineSelectedTheme !== selectedTheme
+      : Boolean(selectedTheme);
 
     return {
       currentCalendarId: resolvedActiveCalendarId,
+      selectedTheme,
       signaturesByCalendarId,
       dirtyCalendarIds,
       dirtyMetaCalendarIds,
       dirtyDayCalendarIds,
       hasDirtyCalendars: dirtyCalendarIds.length > 0,
-      hasDirtyState: dirtyCalendarIds.length > 0 || currentCalendarIdDirty,
+      hasDirtyState: dirtyCalendarIds.length > 0 || currentCalendarIdDirty || themeDirty,
       currentCalendarIdDirty,
+      themeDirty,
       currentCalendarMetaDirty: dirtyMetaCalendarIds.includes(resolvedActiveCalendarId),
       currentCalendarDayDirty: dirtyDayCalendarIds.includes(resolvedActiveCalendarId),
       currentCalendarDirty: dirtyCalendarIds.includes(resolvedActiveCalendarId),
@@ -2821,7 +2895,9 @@ function setupProfileSwitcher({
 
     const dirtySummary = readDriveDirtyCalendarSummary();
     setCalendarDirtyIndicator(
-      Boolean(dirtySummary.currentCalendarDirty || dirtySummary.currentCalendarIdDirty),
+      Boolean(
+        dirtySummary.currentCalendarDirty || dirtySummary.currentCalendarIdDirty || dirtySummary.themeDirty,
+      ),
     );
   };
 
@@ -2829,11 +2905,12 @@ function setupProfileSwitcher({
     baselineCalendarMetaSignatureById.clear();
     baselineCalendarDaySignatureById.clear();
     baselineDriveCurrentCalendarId = null;
+    baselineDriveSelectedTheme = null;
     syncCalendarDirtyIndicator();
   };
 
   const markAllCalendarsAsDriveCleanFromLocalState = () => {
-    const { currentCalendarId, signaturesByCalendarId } = readLocalDriveCalendarSignatures();
+    const { currentCalendarId, selectedTheme, signaturesByCalendarId } = readLocalDriveCalendarSignatures();
     baselineCalendarMetaSignatureById.clear();
     baselineCalendarDaySignatureById.clear();
     signaturesByCalendarId.forEach((signatures, calendarId) => {
@@ -2844,6 +2921,7 @@ function setupProfileSwitcher({
       currentCalendarId,
       signaturesByCalendarId,
     });
+    baselineDriveSelectedTheme = selectedTheme || DEFAULT_THEME;
     syncCalendarDirtyIndicator();
   };
 
@@ -4409,6 +4487,9 @@ function setupProfileSwitcher({
       return "all";
     }
 
+    if (dirtySummary.themeDirty) {
+      return "all";
+    }
     if (dirtySummary.currentCalendarIdDirty) {
       return "all";
     }
