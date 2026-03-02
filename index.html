@@ -4746,6 +4746,54 @@
           width: 100%;
         }
       }
+
+      @media (max-width: 400px) {
+        #calendar-scroll {
+          --canvas-gap: 0.58rem;
+          --mobile-side-pad: max(
+            0.42rem,
+            env(safe-area-inset-left, 0px),
+            env(safe-area-inset-right, 0px)
+          );
+          padding-top: 0.42rem;
+          padding-bottom: 0.42rem;
+          padding-left: var(--mobile-side-pad);
+          padding-right: var(--mobile-side-pad);
+          overflow-x: hidden;
+        }
+
+        #calendar-canvas {
+          width: 100%;
+          min-width: 0;
+          justify-items: center;
+        }
+
+        .month-card {
+          width: min(360px, 100%);
+          max-width: 100%;
+          padding: 0.44rem;
+          justify-self: center;
+          margin-inline: auto;
+        }
+
+        .month-title {
+          margin-bottom: 0.5rem;
+          font-size: 0.98rem;
+        }
+
+        .month-table-shell {
+          --month-table-radius: 9px;
+        }
+
+        th,
+        td {
+          font-size: 0.76rem;
+        }
+
+        td {
+          padding: 0.16rem 0.21rem;
+        }
+      }
     </style>
   </head>
   <body>
