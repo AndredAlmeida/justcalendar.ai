@@ -2017,8 +2017,8 @@
         flex-direction: column;
         align-items: center;
         gap: 0.4rem;
-        width: 2.45rem;
-        padding: 0.26rem 0.1rem;
+        width: 2.9rem;
+        padding: 0.32rem 0.2rem;
         border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
         border-radius: 999px;
         background: color-mix(in srgb, var(--panel) 96%, transparent);
@@ -4741,10 +4741,10 @@
         }
 
         #quick-links-options {
-          width: 2.24rem;
+          width: 2.6rem;
           gap: 0.34rem;
           bottom: calc(100% + 0.38rem);
-          padding: 0.22rem 0.08rem;
+          padding: 0.26rem 0.14rem;
         }
 
         #openclaw-link {
@@ -5655,7 +5655,8 @@
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Open justcal.ai on GitHub"
-          class="quick-link-option"
+          class="quick-link-option tooltip-target tooltip-left"
+          data-tooltip="View on GitHub"
         >
           <svg class="github-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path
@@ -5668,7 +5669,8 @@
           type="button"
           aria-label="Open Telegram Log"
           aria-expanded="false"
-          class="quick-link-option"
+          class="quick-link-option tooltip-target tooltip-left"
+          data-tooltip="Open Telegram Log"
         >
           <svg class="telegram-log-icon" viewBox="0 0 24 24" aria-hidden="true">
             <rect x="4.5" y="4.5" width="15" height="15" rx="3" ry="3" />
@@ -5683,7 +5685,8 @@
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Open Privacy Policy"
-          class="quick-link-option"
+          class="quick-link-option tooltip-target tooltip-left"
+          data-tooltip="Open Privacy Policy"
         >
           <svg class="privacy-policy-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 3 5.5 6v5.4c0 3.9 2.2 7.7 6.5 9.6 4.3-1.9 6.5-5.7 6.5-9.6V6Z" />
