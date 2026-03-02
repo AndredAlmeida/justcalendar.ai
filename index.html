@@ -561,12 +561,13 @@
       #theme-switcher {
         position: fixed;
         right: 1rem;
-        bottom: calc(1rem + 2.25rem + 0.65rem);
+        bottom: calc(1rem + (2.25rem + 0.65rem) * 2);
         z-index: 21;
         display: flex;
         align-items: center;
         justify-content: flex-end;
         min-width: 2.25rem;
+        transition: bottom 0.18s ease;
       }
 
       #tweak-controls {
@@ -1980,9 +1981,7 @@
         display: none;
       }
 
-      #github-link,
-      #openclaw-link,
-      #telegram-log-toggle {
+      #openclaw-link {
         position: fixed;
         width: 2.25rem;
         height: 2.25rem;
@@ -1998,23 +1997,90 @@
         cursor: pointer;
         z-index: 20;
         transition:
+          bottom 0.18s ease,
           transform 0.15s ease,
           box-shadow 0.15s ease;
       }
 
-      #github-link {
+      #quick-links-switcher {
+        position: fixed;
         right: 1rem;
         bottom: 1rem;
+        z-index: 20;
+      }
+
+      #quick-links-options {
+        position: absolute;
+        right: 0;
+        bottom: calc(100% + 0.56rem);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.4rem;
+        width: 2.45rem;
+        padding: 0.26rem 0.1rem;
+        border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--panel) 96%, transparent);
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.24);
+        transform: translateY(0.2rem) scale(0.98);
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.16s ease,
+          transform 0.18s ease;
+      }
+
+      #quick-links-switcher.is-expanded #quick-links-options {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
+      }
+
+      #quick-links-toggle,
+      .quick-link-option {
+        width: 2.25rem;
+        height: 2.25rem;
+        display: inline-grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--ink);
+        background: var(--panel);
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18);
+        text-decoration: none;
+      }
+
+      #quick-links-toggle {
+        appearance: none;
+        font-size: 1.08rem;
+        font-weight: 760;
+        line-height: 1;
+        cursor: pointer;
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease;
+      }
+
+      .quick-link-option {
+        cursor: pointer;
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease;
       }
 
       #openclaw-link {
         right: 1rem;
-        bottom: calc(1rem + (2.25rem + 0.65rem) * 2);
+        bottom: calc(1rem + (2.25rem + 0.65rem) * 1);
       }
 
-      #telegram-log-toggle {
-        right: 1rem;
-        bottom: calc(1rem + (2.25rem + 0.65rem) * 3);
+      :root.quick-links-expanded #openclaw-link {
+        bottom: calc(1rem + (2.25rem + 0.65rem) * 4);
+      }
+
+      :root.quick-links-expanded #theme-switcher {
+        bottom: calc(1rem + (2.25rem + 0.65rem) * 5);
       }
 
       #return-to-current {
@@ -3342,9 +3408,9 @@
         transform: translateY(-1px);
       }
 
-      #github-link:hover,
-      #openclaw-link:hover,
-      #telegram-log-toggle:hover {
+      #quick-links-toggle:hover,
+      .quick-link-option:hover,
+      #openclaw-link:hover {
         transform: translateY(-1px);
         box-shadow: 0 10px 22px rgba(15, 23, 42, 0.24);
       }
@@ -3355,9 +3421,9 @@
         transform: translateY(0);
       }
 
-      #github-link:active,
-      #openclaw-link:active,
-      #telegram-log-toggle:active {
+      #quick-links-toggle:active,
+      .quick-link-option:active,
+      #openclaw-link:active {
         transform: translateY(0);
       }
 
@@ -3368,9 +3434,9 @@
         outline-offset: 2px;
       }
 
-      #github-link:focus-visible,
-      #openclaw-link:focus-visible,
-      #telegram-log-toggle:focus-visible {
+      #quick-links-toggle:focus-visible,
+      .quick-link-option:focus-visible,
+      #openclaw-link:focus-visible {
         outline: 2px solid #3b82f6;
         outline-offset: 2px;
       }
@@ -3398,6 +3464,17 @@
       .telegram-log-icon {
         width: 1.08rem;
         height: 1.08rem;
+        display: block;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .privacy-policy-icon {
+        width: 1.04rem;
+        height: 1.04rem;
         display: block;
         fill: none;
         stroke: currentColor;
@@ -3546,34 +3623,6 @@
 
       #drive-dirty-indicator.is-visible {
         opacity: 1;
-      }
-
-      #privacy-policy-link {
-        position: fixed;
-        left: max(1.24rem, calc(env(safe-area-inset-left, 0px) + 1.24rem));
-        bottom: max(0.48rem, calc(env(safe-area-inset-bottom, 0px) + 0.48rem));
-        font-size: 0.58rem;
-        line-height: 1;
-        letter-spacing: 0.01em;
-        color: color-mix(in srgb, var(--ink) 58%, transparent);
-        text-decoration: none;
-        opacity: 0.46;
-        z-index: 84;
-        transition:
-          opacity 0.15s ease,
-          color 0.15s ease;
-      }
-
-      #privacy-policy-link:hover {
-        opacity: 0.72;
-        color: color-mix(in srgb, var(--ink) 76%, transparent);
-      }
-
-      #privacy-policy-link:focus-visible {
-        opacity: 0.88;
-        outline: 2px solid color-mix(in srgb, var(--line) 82%, transparent);
-        outline-offset: 2px;
-        border-radius: 4px;
       }
 
       #drive-busy-overlay.is-active {
@@ -4126,9 +4175,9 @@
         );
       }
 
-      :root.dark #github-link,
-      :root.dark #openclaw-link,
-      :root.dark #telegram-log-toggle {
+      :root.dark #quick-links-toggle,
+      :root.dark .quick-link-option,
+      :root.dark #openclaw-link {
         box-shadow: 0 8px 20px rgba(2, 6, 23, 0.6);
       }
 
@@ -4439,7 +4488,7 @@
 
         #theme-switcher {
           right: 0.75rem;
-          bottom: calc(0.75rem + 2.05rem + 0.4rem);
+          bottom: calc(0.75rem + (2.05rem + 0.4rem) * 2);
           min-width: 2.05rem;
         }
 
@@ -4592,12 +4641,6 @@
           border-radius: 10px;
         }
 
-        #privacy-policy-link {
-          left: max(1.08rem, calc(env(safe-area-inset-left, 0px) + 1.08rem));
-          bottom: max(0.38rem, calc(env(safe-area-inset-bottom, 0px) + 0.38rem));
-          font-size: 0.54rem;
-        }
-
         #calendar-switcher.is-expanded.is-adding #calendar-options {
           width: min(14.4rem, 86vw);
           max-height: calc(100dvh - 5.2rem);
@@ -4686,25 +4729,37 @@
           font-size: 0.66rem;
         }
 
-        #github-link {
+        #quick-links-switcher {
           right: 0.75rem;
           bottom: 0.75rem;
+        }
+
+        #quick-links-toggle,
+        .quick-link-option {
           width: 2.05rem;
           height: 2.05rem;
+        }
+
+        #quick-links-options {
+          width: 2.24rem;
+          gap: 0.34rem;
+          bottom: calc(100% + 0.38rem);
+          padding: 0.22rem 0.08rem;
         }
 
         #openclaw-link {
           right: 0.75rem;
-          bottom: calc(0.75rem + (2.05rem + 0.4rem) * 2);
+          bottom: calc(0.75rem + (2.05rem + 0.4rem) * 1);
           width: 2.05rem;
           height: 2.05rem;
         }
 
-        #telegram-log-toggle {
-          right: 0.75rem;
-          bottom: calc(0.75rem + (2.05rem + 0.4rem) * 3);
-          width: 2.05rem;
-          height: 2.05rem;
+        :root.quick-links-expanded #openclaw-link {
+          bottom: calc(0.75rem + (2.05rem + 0.4rem) * 4);
+        }
+
+        :root.quick-links-expanded #theme-switcher {
+          bottom: calc(0.75rem + (2.05rem + 0.4rem) * 5);
         }
 
         #return-to-current {
@@ -4714,7 +4769,8 @@
 
         .github-icon,
         .openclaw-icon,
-        .telegram-log-icon {
+        .telegram-log-icon,
+        .privacy-policy-icon {
           width: 1rem;
           height: 1rem;
         }
@@ -5578,21 +5634,6 @@
       </button>
     </div>
     <button
-      id="telegram-log-toggle"
-      type="button"
-      aria-label="Open Telegram Log"
-      aria-expanded="false"
-      class="tooltip-target tooltip-left"
-      data-tooltip="Open Telegram Log"
-    >
-      <svg class="telegram-log-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="4.5" y="4.5" width="15" height="15" rx="3" ry="3" />
-        <path d="M8 9h8" />
-        <path d="M8 12h8" />
-        <path d="M8 15h5" />
-      </svg>
-    </button>
-    <button
       id="openclaw-link"
       type="button"
       aria-label="Connect to your Agent"
@@ -5606,21 +5647,61 @@
         aria-hidden="true"
       />
     </button>
-    <a
-      id="github-link"
-      href="https://github.com/AndredAlmeida/justcal.ai"
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label="Open justcal.ai on GitHub"
-      class="tooltip-target tooltip-left"
-      data-tooltip="View on GitHub"
-    >
-      <svg class="github-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          d="M9 19c-4 1.5-5-1.5-7-2m14 4v-3.8a3.35 3.35 0 0 0-.95-2.6c3.2-.35 6.55-1.6 6.55-7.1a5.5 5.5 0 0 0-1.5-3.8 5.1 5.1 0 0 0-.1-3.75s-1.2-.4-4 1.5a13.8 13.8 0 0 0-7 0c-2.8-1.9-4-1.5-4-1.5a5.1 5.1 0 0 0-.1 3.75 5.5 5.5 0 0 0-1.5 3.8c0 5.45 3.35 6.75 6.55 7.1a3.35 3.35 0 0 0-.95 2.6V21"
-        />
-      </svg>
-    </a>
+    <div id="quick-links-switcher">
+      <div id="quick-links-options" aria-label="Quick links" aria-hidden="true">
+        <a
+          id="github-link"
+          href="https://github.com/AndredAlmeida/justcal.ai"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Open justcal.ai on GitHub"
+          class="quick-link-option"
+        >
+          <svg class="github-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M9 19c-4 1.5-5-1.5-7-2m14 4v-3.8a3.35 3.35 0 0 0-.95-2.6c3.2-.35 6.55-1.6 6.55-7.1a5.5 5.5 0 0 0-1.5-3.8 5.1 5.1 0 0 0-.1-3.75s-1.2-.4-4 1.5a13.8 13.8 0 0 0-7 0c-2.8-1.9-4-1.5-4-1.5a5.1 5.1 0 0 0-.1 3.75 5.5 5.5 0 0 0-1.5 3.8c0 5.45 3.35 6.75 6.55 7.1a3.35 3.35 0 0 0-.95 2.6V21"
+            />
+          </svg>
+        </a>
+        <button
+          id="telegram-log-toggle"
+          type="button"
+          aria-label="Open Telegram Log"
+          aria-expanded="false"
+          class="quick-link-option"
+        >
+          <svg class="telegram-log-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="4.5" y="4.5" width="15" height="15" rx="3" ry="3" />
+            <path d="M8 9h8" />
+            <path d="M8 12h8" />
+            <path d="M8 15h5" />
+          </svg>
+        </button>
+        <a
+          id="privacy-policy-action"
+          href="http://justcalendar.ai/privacy-policy.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Open Privacy Policy"
+          class="quick-link-option"
+        >
+          <svg class="privacy-policy-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3 5.5 6v5.4c0 3.9 2.2 7.7 6.5 9.6 4.3-1.9 6.5-5.7 6.5-9.6V6Z" />
+            <path d="M9.2 11.9 11.2 13.9 14.9 10.2" />
+          </svg>
+        </a>
+      </div>
+      <button
+        id="quick-links-toggle"
+        type="button"
+        class="tooltip-target tooltip-left"
+        data-tooltip="Open Quick Links"
+        aria-label="Open quick links"
+        aria-expanded="false"
+      >
+        ?
+      </button>
+    </div>
     <section id="drive-actions-menu" aria-label="Drive actions" aria-hidden="true">
       <p class="drive-actions-title">Drive Actions (P)</p>
       <div id="drive-actions-list">
@@ -5667,9 +5748,6 @@
       </div>
     </section>
     <div id="drive-dirty-indicator" aria-hidden="true"></div>
-    <a id="privacy-policy-link" href="http://justcalendar.ai/privacy-policy.html"
-      >Privacy Policy</a
-    >
     <div id="drive-busy-overlay" aria-hidden="true">
       <div class="drive-busy-content" role="status" aria-live="polite" aria-label="LOADING">
         <div class="drive-busy-wheel" aria-hidden="true"></div>

@@ -20,6 +20,9 @@ const telegramLogPanel = document.getElementById("telegram-log-panel");
 const telegramLogPanelBackdrop = document.getElementById("telegram-log-panel-backdrop");
 const telegramLogCloseButton = document.getElementById("telegram-log-close");
 const telegramLogFrame = document.getElementById("telegram-log-frame");
+const quickLinksSwitcher = document.getElementById("quick-links-switcher");
+const quickLinksToggleButton = document.getElementById("quick-links-toggle");
+const quickLinksOptions = document.getElementById("quick-links-options");
 const agentConnectPopupBackdrop = document.getElementById("agent-connect-popup-backdrop");
 const agentConnectPopup = document.getElementById("agent-connect-popup");
 const agentConnectCloseButton = document.getElementById("agent-connect-close");
@@ -1280,6 +1283,62 @@ function setupTelegramLogPanel({ toggleButton, panel, backdrop, closeButton }) {
     }
     event.preventDefault();
     setOpenState(false, { focusToggle: true });
+  });
+}
+
+function setupQuickLinksMenu({ switcher, toggleButton, options }) {
+  const setExpanded = (isExpanded, { focusToggle = false } = {}) => {
+    switcher.classList.toggle("is-expanded", isExpanded);
+    document.documentElement.classList.toggle("quick-links-expanded", isExpanded);
+    options.setAttribute("aria-hidden", String(!isExpanded));
+    toggleButton.setAttribute("aria-expanded", String(isExpanded));
+    toggleButton.setAttribute(
+      "aria-label",
+      isExpanded ? "Close quick links" : "Open quick links",
+    );
+    toggleButton.setAttribute(
+      "data-tooltip",
+      isExpanded ? "Close Quick Links" : "Open Quick Links",
+    );
+
+    if (!isExpanded && focusToggle) {
+      toggleButton.focus({ preventScroll: true });
+    }
+  };
+
+  setExpanded(false);
+
+  toggleButton.addEventListener("click", (event) => {
+    event.preventDefault();
+    const shouldExpand = !switcher.classList.contains("is-expanded");
+    setExpanded(shouldExpand);
+  });
+
+  options.addEventListener("click", (event) => {
+    const actionTarget =
+      event.target instanceof Element ? event.target.closest("a, button") : null;
+    if (!actionTarget) {
+      return;
+    }
+    setExpanded(false);
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!switcher.classList.contains("is-expanded")) {
+      return;
+    }
+    if (switcher.contains(event.target)) {
+      return;
+    }
+    setExpanded(false);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !switcher.classList.contains("is-expanded")) {
+      return;
+    }
+    event.preventDefault();
+    setExpanded(false, { focusToggle: true });
   });
 }
 
@@ -6865,6 +6924,14 @@ const applyDriveImportedStateInPlace = () => {
 
 if (themeToggleButton) {
   themeToggleApi = setupThemeToggle(themeToggleButton);
+}
+
+if (quickLinksSwitcher && quickLinksToggleButton && quickLinksOptions) {
+  setupQuickLinksMenu({
+    switcher: quickLinksSwitcher,
+    toggleButton: quickLinksToggleButton,
+    options: quickLinksOptions,
+  });
 }
 
 if (telegramLogToggleButton && telegramLogPanel) {
