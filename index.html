@@ -3625,6 +3625,34 @@
         opacity: 1;
       }
 
+      #privacy-policy-link-subtle {
+        position: fixed;
+        left: max(1.34rem, calc(env(safe-area-inset-left, 0px) + 0.72rem));
+        bottom: max(0.48rem, calc(env(safe-area-inset-bottom, 0px) + 0.28rem));
+        color: color-mix(in srgb, var(--text) 46%, transparent);
+        font-size: 0.62rem;
+        line-height: 1;
+        text-decoration: none;
+        letter-spacing: 0.015em;
+        opacity: 0.46;
+        z-index: 86;
+        transition:
+          opacity 0.16s ease,
+          color 0.16s ease;
+      }
+
+      #privacy-policy-link-subtle:hover,
+      #privacy-policy-link-subtle:focus-visible {
+        color: color-mix(in srgb, var(--text) 82%, transparent);
+        opacity: 0.78;
+      }
+
+      #privacy-policy-link-subtle:focus-visible {
+        outline: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+
       #drive-busy-overlay.is-active {
         opacity: 1;
         pointer-events: auto;
@@ -3830,24 +3858,8 @@
         color: color-mix(in srgb, var(--ink) 84%, var(--line) 16%);
       }
 
-      .agent-connect-step-list {
+      .agent-connect-step-card {
         margin: 0;
-        padding: 0 0 0 1.1rem;
-        display: grid;
-        gap: 0.45rem;
-        color: color-mix(in srgb, var(--ink) 88%, var(--line) 12%);
-        font-size: 0.9rem;
-        line-height: 1.36;
-      }
-
-      .agent-connect-step-list a {
-        color: var(--score-slider-active);
-        font-weight: 640;
-        text-decoration-thickness: 1px;
-        text-underline-offset: 2px;
-      }
-
-      .agent-connect-token-card {
         display: grid;
         gap: 0.62rem;
         padding: 0.82rem;
@@ -3856,14 +3868,32 @@
         background: color-mix(in srgb, var(--muted) 54%, var(--panel) 46%);
       }
 
-      .agent-connect-token-label {
-        margin: 0;
-        font-size: 0.68rem;
+      .agent-connect-step-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .agent-connect-step-index {
+        width: 1.32rem;
+        height: 1.32rem;
+        display: inline-grid;
+        place-items: center;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+        background: color-mix(in srgb, var(--panel) 90%, transparent);
+        color: color-mix(in srgb, var(--ink) 92%, transparent);
+        font-size: 0.72rem;
+        font-weight: 740;
         line-height: 1;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
+      }
+
+      .agent-connect-step-title {
+        margin: 0;
+        font-size: 0.88rem;
+        line-height: 1.28;
         font-weight: 700;
-        color: color-mix(in srgb, var(--line) 76%, var(--ink) 24%);
+        color: color-mix(in srgb, var(--ink) 92%, var(--line) 8%);
       }
 
       .agent-connect-token-row {
@@ -3890,7 +3920,8 @@
       }
 
       #agent-connect-copy,
-      #agent-connect-generate {
+      #agent-connect-generate,
+      #agent-connect-copy-instruction {
         min-height: 2.45rem;
         border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
         border-radius: 999px;
@@ -3913,28 +3944,51 @@
         font-size: 0.9rem;
       }
 
+      #agent-connect-copy-instruction {
+        width: 100%;
+        min-height: 2.3rem;
+      }
+
       #agent-connect-copy:hover,
-      #agent-connect-generate:hover {
+      #agent-connect-generate:hover,
+      #agent-connect-copy-instruction:hover {
         transform: translateY(-1px);
         background: color-mix(in srgb, var(--muted) 86%, var(--panel) 14%);
       }
 
       #agent-connect-copy:active,
-      #agent-connect-generate:active {
+      #agent-connect-generate:active,
+      #agent-connect-copy-instruction:active {
         transform: translateY(0);
       }
 
       #agent-connect-copy:focus-visible,
-      #agent-connect-generate:focus-visible {
+      #agent-connect-generate:focus-visible,
+      #agent-connect-copy-instruction:focus-visible {
         outline: 2px solid color-mix(in srgb, var(--score-slider-active) 72%, transparent);
         outline-offset: 2px;
       }
 
       #agent-connect-copy:disabled,
-      #agent-connect-generate:disabled {
+      #agent-connect-generate:disabled,
+      #agent-connect-copy-instruction:disabled {
         opacity: 0.46;
         cursor: not-allowed;
         transform: none;
+      }
+
+      #agent-connect-instruction {
+        width: 100%;
+        min-height: 11rem;
+        resize: none;
+        border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+        border-radius: 12px;
+        padding: 0.68rem 0.72rem;
+        background: color-mix(in srgb, var(--panel) 90%, transparent);
+        color: var(--ink);
+        font-size: 0.78rem;
+        line-height: 1.45;
+        font-family: "SFMono-Regular", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
       }
 
       .agent-connect-token-hint {
@@ -4798,16 +4852,17 @@
           font-size: 1.03rem;
         }
 
-        .agent-connect-step-list {
+        .agent-connect-step-title {
           font-size: 0.84rem;
         }
 
         .agent-connect-token-row {
-          grid-template-columns: 1fr;
+          grid-template-columns: minmax(0, 1fr) auto;
         }
 
-        #agent-connect-copy {
-          width: 100%;
+        #agent-connect-instruction {
+          min-height: 10rem;
+          font-size: 0.75rem;
         }
       }
 
@@ -5751,6 +5806,15 @@
       </div>
     </section>
     <div id="drive-dirty-indicator" aria-hidden="true"></div>
+    <a
+      id="privacy-policy-link-subtle"
+      href="http://justcalendar.ai/privacy-policy.html"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Open Privacy Policy"
+    >
+      Privacy Policy
+    </a>
     <div id="drive-busy-overlay" aria-hidden="true">
       <div class="drive-busy-content" role="status" aria-live="polite" aria-label="LOADING">
         <div class="drive-busy-wheel" aria-hidden="true"></div>
@@ -5803,26 +5867,13 @@
       </div>
       <h2 class="agent-connect-popup-title">Connect Just Calendar to Your Agent</h2>
       <p class="agent-connect-popup-copy">
-        Connect your assistant by installing a skill and setting up the CLI, then generating a token.
+        Use the two steps below to generate a token and send the setup instruction to your agent.
       </p>
-      <ol class="agent-connect-step-list">
-        <li>
-          Get the required skill from
-          <a
-            href="https://clawhub.ai"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Open ClawHub skill directory"
-          >
-            clawhub.ai
-          </a>
-          (placeholder link).
-        </li>
-        <li>Follow the CLI instructions shown on the skill page.</li>
-        <li>Generate an Agent Token below and paste it into your CLI setup.</li>
-      </ol>
-      <div class="agent-connect-token-card">
-        <p class="agent-connect-token-label">Agent Token</p>
+      <section class="agent-connect-step-card" aria-label="Step 1: Generate token">
+        <div class="agent-connect-step-header">
+          <span class="agent-connect-step-index" aria-hidden="true">1</span>
+          <p class="agent-connect-step-title">Generate New Token</p>
+        </div>
         <div class="agent-connect-token-row">
           <input
             id="agent-connect-token"
@@ -5841,7 +5892,23 @@
         <p id="agent-connect-token-hint" class="agent-connect-token-hint">
           Login to Google Drive to enable token generation.
         </p>
-      </div>
+      </section>
+      <section class="agent-connect-step-card" aria-label="Step 2: Send instruction to your agent">
+        <div class="agent-connect-step-header">
+          <span class="agent-connect-step-index" aria-hidden="true">2</span>
+          <p class="agent-connect-step-title">Send this prompt to your agent</p>
+        </div>
+        <textarea id="agent-connect-instruction" readonly aria-label="Agent setup instruction">
+Please install the following skill and its associated CLI tool:
+https://clawhub.ai/AndredAlmeida/justcalendar
+
+After installation, authenticate using the following token:
+&lt;generated_token&gt;
+
+Let me know once the setup and authentication are complete.
+        </textarea>
+        <button id="agent-connect-copy-instruction" type="button">Copy Prompt</button>
+      </section>
     </section>
     <div id="telegram-log-panel-backdrop" aria-hidden="true"></div>
     <section

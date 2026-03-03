@@ -30,6 +30,8 @@ const agentConnectGenerateButton = document.getElementById("agent-connect-genera
 const agentConnectCopyButton = document.getElementById("agent-connect-copy");
 const agentConnectTokenInput = document.getElementById("agent-connect-token");
 const agentConnectTokenHint = document.getElementById("agent-connect-token-hint");
+const agentConnectInstructionInput = document.getElementById("agent-connect-instruction");
+const agentConnectCopyInstructionButton = document.getElementById("agent-connect-copy-instruction");
 const mobileProfileViewToggleButton = document.getElementById("profile-mobile-view-toggle");
 const mobileProfileViewToggleLabel = document.getElementById("profile-mobile-view-toggle-label");
 const driveConflictPopupBackdrop = document.getElementById("drive-conflict-popup-backdrop");
@@ -115,6 +117,8 @@ const DRIVE_ACCOUNT_ID_LENGTH = 22;
 const DRIVE_ACCOUNT_ID_PATTERN = /^[A-Za-z0-9]{12,48}$/;
 const LEGACY_DRIVE_ACCOUNT_ID_PATTERN = /^acc_[A-Za-z0-9][A-Za-z0-9_-]{5,63}$/;
 const LEGACY_DRIVE_CALENDAR_ID_PATTERN = /^cal_[A-Za-z0-9][A-Za-z0-9_-]{5,63}$/;
+const AGENT_SKILL_URL = "https://clawhub.ai/AndredAlmeida/justcalendar";
+const AGENT_TOKEN_PLACEHOLDER = "<generated_token>";
 
 const MIN_FADE_DELTA = 0;
 const MAX_FADE_DELTA = 100;
@@ -1349,8 +1353,10 @@ function setupAgentConnectPopup({
   closeButton,
   generateButton,
   copyButton,
+  copyInstructionButton,
   tokenInput,
   tokenHint,
+  instructionInput,
 }) {
   let driveReady = false;
   let hasStoredToken = false;
@@ -1387,16 +1393,31 @@ function setupAgentConnectPopup({
 
   const hasVisibleTokenValue = () => Boolean(tokenInput && tokenInput.value.trim());
 
+  const syncInstructionField = () => {
+    if (!instructionInput) {
+      return;
+    }
+    const tokenValue = hasVisibleTokenValue() ? tokenInput.value.trim() : AGENT_TOKEN_PLACEHOLDER;
+    instructionInput.value = `Please install the following skill and its associated CLI tool:
+${AGENT_SKILL_URL}
+
+After installation, authenticate using the following token:
+${tokenValue}
+
+Let me know once the setup and authentication are complete.`;
+  };
+
   const syncTokenFieldPresentation = () => {
-    if (!tokenInput) {
-      return;
+    if (tokenInput) {
+      if (hasVisibleTokenValue()) {
+        syncInstructionField();
+        return;
+      }
+      tokenInput.placeholder = hasStoredToken
+        ? "Token already generated (not shown for security)"
+        : "Token not generated yet";
     }
-    if (hasVisibleTokenValue()) {
-      return;
-    }
-    tokenInput.placeholder = hasStoredToken
-      ? "Token already generated (not shown for security)"
-      : "Token not generated yet";
+    syncInstructionField();
   };
 
   const clearVisibleTokenValue = () => {
@@ -1541,6 +1562,22 @@ function setupAgentConnectPopup({
       tokenInput.focus({ preventScroll: true });
       tokenInput.select();
       setHintMessage("Copy failed. Copy the token manually from the field.", {
+        ready: true,
+      });
+    }
+  });
+
+  copyInstructionButton?.addEventListener("click", async () => {
+    if (!instructionInput || !instructionInput.value.trim()) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(instructionInput.value.trim());
+      setHintMessage("Instruction copied to clipboard.", { ready: true });
+    } catch {
+      instructionInput.focus({ preventScroll: true });
+      instructionInput.select();
+      setHintMessage("Copy failed. Copy the setup instruction manually.", {
         ready: true,
       });
     }
@@ -6956,8 +6993,10 @@ if (openclawButton && agentConnectPopup) {
     closeButton: agentConnectCloseButton,
     generateButton: agentConnectGenerateButton,
     copyButton: agentConnectCopyButton,
+    copyInstructionButton: agentConnectCopyInstructionButton,
     tokenInput: agentConnectTokenInput,
     tokenHint: agentConnectTokenHint,
+    instructionInput: agentConnectInstructionInput,
   });
 }
 
