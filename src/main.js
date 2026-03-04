@@ -20,6 +20,10 @@ const telegramLogPanel = document.getElementById("telegram-log-panel");
 const telegramLogPanelBackdrop = document.getElementById("telegram-log-panel-backdrop");
 const telegramLogCloseButton = document.getElementById("telegram-log-close");
 const telegramLogFrame = document.getElementById("telegram-log-frame");
+const aboutPopupBackdrop = document.getElementById("about-popup-backdrop");
+const aboutPopup = document.getElementById("about-popup");
+const aboutPopupCloseButton = document.getElementById("about-popup-close");
+const aboutOpenTelegramLogButton = document.getElementById("about-open-telegram-log");
 const quickLinksSwitcher = document.getElementById("quick-links-switcher");
 const quickLinksToggleButton = document.getElementById("quick-links-toggle");
 const quickLinksOptions = document.getElementById("quick-links-options");
@@ -1288,6 +1292,103 @@ function setupTelegramLogPanel({ toggleButton, panel, backdrop, closeButton }) {
     event.preventDefault();
     setOpenState(false, { focusToggle: true });
   });
+}
+
+function setupAboutPopup({
+  triggerButton,
+  popup,
+  backdrop,
+  closeButton,
+  openTelegramLogButton,
+  telegramLogToggleButton,
+  telegramLogPanel,
+}) {
+  const isTextEntryTarget = (rawTarget) => {
+    if (!(rawTarget instanceof Element)) {
+      return false;
+    }
+
+    if (
+      rawTarget instanceof HTMLInputElement ||
+      rawTarget instanceof HTMLTextAreaElement ||
+      rawTarget instanceof HTMLSelectElement
+    ) {
+      return true;
+    }
+
+    if (rawTarget.isContentEditable) {
+      return true;
+    }
+
+    return Boolean(rawTarget.closest("[contenteditable='true']"));
+  };
+
+  const setOpenState = (isOpen, { focusTrigger = false } = {}) => {
+    popup.classList.toggle("is-open", isOpen);
+    backdrop?.classList.toggle("is-open", isOpen);
+    popup.setAttribute("aria-hidden", String(!isOpen));
+    backdrop?.setAttribute("aria-hidden", String(!isOpen));
+    if (triggerButton) {
+      triggerButton.setAttribute("aria-expanded", String(isOpen));
+      triggerButton.setAttribute("aria-label", isOpen ? "Close about menu" : "Open about menu");
+      triggerButton.setAttribute("data-tooltip", isOpen ? "Close About" : "Open About");
+    }
+    if (!isOpen && focusTrigger && triggerButton) {
+      triggerButton.focus({ preventScroll: true });
+    }
+  };
+
+  setOpenState(false);
+
+  triggerButton?.addEventListener("click", (event) => {
+    event.preventDefault();
+    setOpenState(!popup.classList.contains("is-open"));
+  });
+
+  closeButton?.addEventListener("click", () => {
+    setOpenState(false, { focusTrigger: true });
+  });
+
+  backdrop?.addEventListener("click", () => {
+    setOpenState(false);
+  });
+
+  openTelegramLogButton?.addEventListener("click", () => {
+    setOpenState(false);
+    if (!telegramLogToggleButton || !telegramLogPanel) {
+      return;
+    }
+    if (!telegramLogPanel.classList.contains("is-open")) {
+      telegramLogToggleButton.click();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const key = typeof event.key === "string" ? event.key.toLowerCase() : "";
+
+    if (
+      key === "a" &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      !isTextEntryTarget(event.target)
+    ) {
+      event.preventDefault();
+      setOpenState(!popup.classList.contains("is-open"));
+      return;
+    }
+
+    if (event.key === "Escape" && popup.classList.contains("is-open")) {
+      event.preventDefault();
+      setOpenState(false, { focusTrigger: true });
+    }
+  });
+
+  return {
+    open: () => setOpenState(true),
+    close: () => setOpenState(false),
+    isOpen: () => popup.classList.contains("is-open"),
+  };
 }
 
 function setupQuickLinksMenu({ switcher, toggleButton, options }) {
@@ -6963,20 +7064,24 @@ if (themeToggleButton) {
   themeToggleApi = setupThemeToggle(themeToggleButton);
 }
 
-if (quickLinksSwitcher && quickLinksToggleButton && quickLinksOptions) {
-  setupQuickLinksMenu({
-    switcher: quickLinksSwitcher,
-    toggleButton: quickLinksToggleButton,
-    options: quickLinksOptions,
-  });
-}
-
 if (telegramLogToggleButton && telegramLogPanel) {
   setupTelegramLogPanel({
     toggleButton: telegramLogToggleButton,
     panel: telegramLogPanel,
     backdrop: telegramLogPanelBackdrop,
     closeButton: telegramLogCloseButton,
+  });
+}
+
+if (aboutPopup) {
+  setupAboutPopup({
+    triggerButton: quickLinksToggleButton,
+    popup: aboutPopup,
+    backdrop: aboutPopupBackdrop,
+    closeButton: aboutPopupCloseButton,
+    openTelegramLogButton: aboutOpenTelegramLogButton,
+    telegramLogToggleButton,
+    telegramLogPanel,
   });
 }
 
