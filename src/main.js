@@ -6072,7 +6072,7 @@ function setupProfileSwitcher({
     switcher.classList.toggle("is-expanded", isExpanded);
     button.setAttribute("aria-expanded", String(isExpanded));
     button.setAttribute("aria-label", isExpanded ? "Close account menu" : "Open account menu");
-    button.setAttribute("data-tooltip", isExpanded ? "Close Account Menu" : "Account Menu");
+    button.setAttribute("data-tooltip", "Account");
 
     if (!isExpanded) {
       setProfileAddAccountExpanded(false);
